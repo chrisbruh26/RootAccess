@@ -1,0 +1,283 @@
+
+
+class Item:
+    def __init__(self, name, description, value=0):
+        self.name = name
+        self.description = description
+        self.value = value
+
+    def __str__(self):
+        return self.name
+
+
+class Weapon(Item):
+    def __init__(self, name, description, value, damage):
+        super().__init__(name, description, value)
+        self.damage = damage
+
+    def __str__(self):
+        return f"{self.name} (Damage: {self.damage})"
+
+
+class Consumable(Item):
+    def __init__(self, name, description, value, health_restore):
+        super().__init__(name, description, value)
+        self.health_restore = health_restore
+
+    def __str__(self):
+        return f"{self.name} (Restores: {self.health_restore} health)"
+
+class Area:
+    def __init__(self, name, description):
+        self.name = name
+        self.description = description
+        self.items = []
+        self.npcs = []
+        self.objects = []
+        self.garden_plants = []  # Special list for plants that can't be taken
+        self.exits = {}  # Dictionary to hold exits: direction -> Area
+
+    def add_exit(self, direction, area):
+        """Add an exit to another area in a given direction."""
+        self.exits[direction] = area
+
+    def get_exit(self, direction):
+        """Get the area in the given direction."""
+        return self.exits.get(direction, None)
+
+    def add_item(self, item):
+        self.items.append(item)
+
+    def remove_item(self, item):
+        if item in self.items:
+            self.items.remove(item)
+
+    def describe(self):
+        desc = f"{self.name}\n{self.description}\n"
+        if self.items:
+            desc += "You see the following items:\n"
+            for item in self.items:
+                desc += f" - {item}\n"
+        if self.npcs:
+            desc += "You see the following characters:\n"
+            for npc in self.npcs:
+                desc += f" - {npc}\n"
+        if self.objects:
+            desc += "There are some objects here:\n"
+            for obj in self.objects:
+                desc += f" - {obj}\n"
+        return desc
+
+
+class Player:
+    def __init__(self, starting_area):
+        self.current_area = starting_area
+        self.inventory = []
+        self.health = 100
+
+    def move(self, direction):
+        """Move the player to the area in the given direction if possible."""
+        next_area = self.current_area.get_exit(direction)
+        if next_area:
+            self.current_area = next_area
+            return f"You move {direction} to {self.current_area.name}."
+        else:
+            return "You can't go that way."
+
+    def teleport(self, area):
+        """Teleport the player to any area."""
+        self.current_area = area
+        return f"You teleport to {self.current_area.name}."
+
+    def pick_up(self, item):
+        if item in self.current_area.items:
+            self.inventory.append(item)
+            self.current_area.remove_item(item)
+            return f"You picked up {item}."
+        else:
+            return "That item is not here."
+
+    def drop(self, item):
+        if item in self.inventory:
+            self.inventory.remove(item)
+            self.current_area.add_item(item)
+            return f"You dropped {item}."
+        else:
+            return "You don't have that item."
+
+
+class Game:
+    def __init__(self):
+        self.areas = {}
+        self.items = {}  # Centralized item registry
+        self.create_items()
+
+        # Initialize areas here or load from data
+        self.create_areas()
+        self.player = Player(self.areas.get('Home'))
+        self.commands = {
+            'move': {'handler': self.cmd_move, 'category': 'movement'},
+            'go': {'handler': self.cmd_move, 'category': 'movement'},
+            'teleport': {'handler': self.cmd_teleport, 'category': 'movement'},
+            'tp': {'handler': self.cmd_teleport, 'category': 'movement'},
+            'look': {'handler': self.cmd_look, 'category': 'system'},
+            'inventory': {'handler': self.cmd_inventory, 'category': 'system'},
+            'inv': {'handler': self.cmd_inventory, 'category': 'system'},
+            'pick': {'handler': self.cmd_pick, 'category': 'interaction'},
+            'drop': {'handler': self.cmd_drop, 'category': 'interaction'},
+            'quit': {'handler': self.cmd_quit, 'category': 'system'},
+            'exit': {'handler': self.cmd_exit, 'category': 'system'},
+            'help': {'handler': self.cmd_help, 'category': 'system'},
+        }
+        self.is_running = True
+
+    def create_items(self):
+        """Dynamically create and register items."""
+        sword = Weapon("Sword", "A sharp blade.", 100, 15)
+        potion = Consumable("Health Potion", "Restores health.", 50, 20)
+        magic_wand = Weapon("Magic Wand", "A wand that casts spells.", 150, 25)
+        # Register items in the centralized item registry
+        self.items[sword.name] = sword
+        self.items[potion.name] = potion
+        self.items[magic_wand.name] = magic_wand  # Register the Magic Wand
+
+
+
+    def create_areas(self):
+        """Create and connect areas in a scalable way."""
+        Home = Area("Home", "You are at home.")
+        Downtown = Area("Downtown", "A bustling city area.")
+        Warehouse = Area("Warehouse", "An abandoned warehouse with construction containers lining the walls, stacked up to the ceiling, run by the Bloodhounds.")
+        Backroads = Area("Backroads", "A foggy, long stretch of road leads to the unknown.")
+        JacksFuel = Area("Jack's Fuel Station", "On the side of the road, a small fuel station with a sign that reads 'Jack's Fuel'.")
+        Farm = Area("The Farm", "A seemingly abandoned farm taken over by the Bloodhounds.")
+
+
+        # Connect areas
+
+        # Home: 
+        Home.add_exit("north", Downtown)
+        Home.add_exit("east", Warehouse)
+
+
+        # Downtown: 
+        Downtown.add_exit("south", Home)
+        Downtown.add_exit("east", Warehouse)
+
+        # Warehouse: 
+        Warehouse.add_exit("west", Downtown)
+        Warehouse.add_exit("north", Backroads)
+
+        # Backroads: 
+        Backroads.add_exit("North", Farm)
+        Backroads.add_exit("west", JacksFuel)
+
+
+
+        # Add areas to the dictionary
+        self.areas['Home'] = Home
+        self.areas['Downtown'] = Downtown
+        self.areas['Warehouse'] = Warehouse
+        self.areas['Backroads'] = Backroads
+        self.areas['JacksFuel'] = JacksFuel
+        self.areas['Farm'] = Farm
+
+
+
+    def game_loop(self):
+        print("Welcome to the Text Adventure Game!")
+        print("Type 'help' for a list of commands.\n")
+        while self.is_running:
+            print(f"\nCurrent location: {self.player.current_area.name}")
+            command_input = input("> ").strip()
+            if not command_input:
+                continue
+            parts = command_input.split()
+            command = parts[0].lower()
+            args = parts[1:]
+            cmd_entry = self.commands.get(command)
+            if cmd_entry:
+                output = cmd_entry['handler'](args)
+                if output:
+                    print(output)
+            else:
+                print("Unknown command. Type 'help' for a list of commands.")
+
+    def cmd_move(self, args):
+        if not args:
+            return "Move where? Specify a direction."
+        direction = args[0].lower()
+        return self.player.move(direction)
+
+    def cmd_teleport(self, args):
+        if not args:
+            return "Teleport where? Specify an area name."
+        area_name = " ".join(args)
+        area = self.areas.get(area_name)
+        if area:
+            return self.player.teleport(area)
+        else:
+            return f"No such area: {area_name}"
+
+    def cmd_look(self, args):
+        return self.player.current_area.describe()
+
+    def cmd_inventory(self, args):
+        if self.player.inventory:
+            return "You have:\n" + "\n".join(f" - {item}" for item in self.player.inventory)
+        else:
+            return "Your inventory is empty."
+
+    def cmd_pick(self, args):
+        if not args:
+            return "Pick up what? Specify an item name."
+        item_name = " ".join(args)
+        # Find item in current area by name
+        for item in self.player.current_area.items:
+            if item.name.lower() == item_name.lower():
+                return self.player.pick_up(item)
+        return f"No such item here: {item_name}"
+
+    def cmd_drop(self, args):
+        if not args:
+            return "Drop what? Specify an item name."
+        item_name = " ".join(args)
+        # Find item in inventory by name
+        for item in self.player.inventory:
+            if item.name.lower() == item_name.lower():
+                return self.player.drop(item)
+        return f"You don't have that item: {item_name}"
+
+    def cmd_quit(self, args):
+        self.is_running = False
+        return "Thanks for playing! Goodbye."
+
+    def cmd_exit(self, args):
+        """List exits for current area or specified area."""
+        if not args:
+            area = self.player.current_area
+        else:
+            area_name = " ".join(args)
+            area = self.areas.get(area_name)
+            if not area:
+                return f"No such area: {area_name}"
+        exits = area.exits
+        if not exits:
+            return f"{area.name} has no exits."
+        exit_list = ", ".join(f"{direction} -> {dest.name}" for direction, dest in exits.items())
+        return f"Exits for {area.name}: {exit_list}"
+
+    def cmd_help(self, args):
+        categories = {}
+        for cmd, info in self.commands.items():
+            cat = info['category']
+            categories.setdefault(cat, []).append(cmd)
+        help_msg = "Available commands:\n"
+        for cat in sorted(categories.keys()):
+            cmds = ", ".join(sorted(categories[cat]))
+            help_msg += f"  {cat.capitalize()}: {cmds}\n"
+        return help_msg
+
+if __name__ == '__main__':
+    game = Game()
+    game.game_loop()

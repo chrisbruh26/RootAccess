@@ -1,0 +1,16 @@
+changes I want to make: 
+add seeds (done)
+create Storage(Object) class
+create instance of storage in player's home
+create garden tools, add to storage in player's home
+gardening mechanics require player to have tools in inventory (just watering can to water plants for now)
+
+
+Plan for storage: 
+
+A subclass of Object. An instance of the Storage class will be an object in the game that can hold items inside it. Set up the Storage class by adding methods to add and remove items from it, and add commands that let the player access the items. Storage object should open/close on command, and when it is open, the items should be listed for the player. If the player says "take [item] from [storage name]", that item should be removed from the Storage object and added to player's inventory.  
+
+
+more_garden_stuff.py has storage and more gardening mechanics but it's not working 
+
+ran debugger for the first time, worked perfectly. I fixed the one issue and now everything is great.

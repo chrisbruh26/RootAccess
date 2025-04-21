@@ -1,0 +1,22 @@
+v21 works perfectly, still checking if NPCs can actually set off glitter bombs. 
+If successful, next step is to allow them to water plants when holding a watering can. Another thing to prioritize is
+making sure the game gives messages about important actions that NPCs take, like I want it to always tell me
+when an NPC plants a seed, and eventually I'll want to know every time they water plants, or give me an item as a gift. 
+Picking up items and looking at them is not as important. 
+
+
+To achieve this, we can implement a notification system that triggers messages for significant actions taken by NPCs, 
+such as planting seeds or watering plants. This will enhance player awareness of the NPCs' 
+activities and ensure that their interactions with the environment are meaningful and impactful.
+
+We can prioritize these notifications by creating a centralized logging function that captures
+and formats messages for significant actions, ensuring they are displayed to the player in a 
+clear and concise manner.
+
+I like that the game only prints a few NPC messages at a time, and it took a lot of work to make sure that
+it wouldn't spam, so idk how to override that and make it always tell me about important actions. And idk how exactly
+to define important actions in a scalable way since there will be several different ways for NPCs to interact with the environment.
+
+One approach could be to create a priority list of actions that are deemed important, such as planting seeds, watering plants, or giving items as gifts. We can then modify the existing message printing system to check against this list before deciding to print a message. This way, we maintain the current message limit but ensure that important actions are always communicated to the player. Additionally, we could implement a tagging system for actions, allowing for easy updates and scalability as more actions are added in the future.
+
+What if we added a notification system that acted similarly to notifications on a device? Like if it captures important NPC actions, and tells the player that there are notifications (or say it in a more interesting way), but don't let them read the notifications until they say a specific action? This way, they will get all the information, but on their terms, which prevents a sudden flood of spam. We could introduce a "notification bell" mechanic that alerts players when significant events occur, allowing them to check the notifications at their leisure. This approach ensures they remain engaged without overwhelming them with constant updates.

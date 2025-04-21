@@ -1277,9 +1277,7 @@ class Game:
         self.add_item_to_area('Backroads', 'Carrot Seed')
 
         self.add_item_to_area('Warehouse', 'Glitter Bomb')
-        self.add_item_to_area('Warehouse', 'Glitter Bomb')
-        self.add_item_to_area('Warehouse', 'Glitter Bomb')
-
+    
 
         self.add_npc_to_area('JacksFuel', 'Jack')
         

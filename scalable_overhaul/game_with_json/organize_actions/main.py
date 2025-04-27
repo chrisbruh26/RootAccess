@@ -1,3 +1,6 @@
+# NOT WORKING YET - still says "no effect" for hazards, should generate other actions
+
+
 import random
 from message_system import MessageManager, MessageCategory, MessagePriority
 
@@ -7,30 +10,7 @@ from npc_behavior import NPCMessageManager
 from message_coordinator import MessageCoordinator
 from hazard_utils import Hazard
 from npc_behavior_coordinator import NPCBehaviorCoordinator
-from npc_behavior import format_npc_action  # Import the grammar utility function
-from npc_behavior import load_npc_actions, get_random_npc_action
 
-# Load NPC actions at the start of the game
-NPC_ACTIONS_FILE = "/home/reginapinkdog/projects/Game_files/RootAccessStuff/simplified_scalable_improvements/npc_actions.json"
-npc_actions = load_npc_actions(NPC_ACTIONS_FILE)
-
-# Example usage in the game loop or NPC behavior logic
-def process_npc_behavior(npc, npc_count):
-    """
-    Process the behavior of an NPC or group of NPCs.
-
-    Args:
-        npc: The NPC object.
-        npc_count: The number of NPCs involved in the action.
-
-    Returns:
-        str: The selected action description.
-    """
-    category = "idle"  # Example category; this could be dynamic
-    action = get_random_npc_action(category, npc_count, npc_actions)
-    if action:
-        return f"{npc.name} {action}" if npc_count == 1 else f"{npc.name} and others {action}"
-    return "The NPC does something unremarkable."
 
 
 
@@ -147,43 +127,113 @@ def convert_to_natural_language(summary, active_gangs):
     # Remove any header lines (those ending with a colon)
     action_lines = [line for line in lines if not line.endswith(':') and line.strip()]
     
-    # Categorize actions into meaningful groups
-    categorized_actions = {
-        "combat": [],
-        "gardening": [],
-        "interaction": [],
-        "talking": [],
-        "friendly": [],
-        "hallucination": [],
-        "hazard": [],
-    }
+    # If we have no action lines, return early
+    if not action_lines:
+        if active_gangs and len(active_gangs) == 1:
+            gang_name = next(iter(active_gangs))
+            return f"The {gang_name} members are quiet for now."
+        else:
+            return "The area is quiet for now."
+    
+    # Group similar actions together
+    hallucination_lines = []
+    friendly_lines = []
+    combat_lines = []
+    gardening_lines = []
+    interaction_lines = []
+    talking_lines = []
+    other_lines = []
     
     for line in action_lines:
         line = line.strip()
-        if "attack" in line.lower() or "fight" in line.lower():
-            categorized_actions["combat"].append(line)
-        elif "plant" in line.lower() or "water" in line.lower() or "harvest" in line.lower():
-            categorized_actions["gardening"].append(line)
-        elif "interact" in line.lower() or "using" in line.lower() or "gives" in line.lower():
-            categorized_actions["interaction"].append(line)
-        elif "talk" in line.lower() or "chat" in line.lower():
-            categorized_actions["talking"].append(line)
+        if "hallucinating" in line.lower() or "seeing things" in line.lower():
+            hallucination_lines.append(line)
         elif "friendly" in line.lower() or "smiles" in line.lower():
-            categorized_actions["friendly"].append(line)
-        elif "hallucinating" in line.lower() or "seeing things" in line.lower():
-            categorized_actions["hallucination"].append(line)
-        elif "hazard" in line.lower() or "effect" in line.lower():
-            categorized_actions["hazard"].append(line)
+            friendly_lines.append(line)
+        elif "attack" in line.lower() or "damage" in line.lower() or "fight" in line.lower():
+            combat_lines.append(line)
+        elif "plant" in line.lower() or "water" in line.lower() or "harvest" in line.lower() or "garden" in line.lower():
+            gardening_lines.append(line)
+        elif "interact" in line.lower() or "using" in line.lower() or "gives" in line.lower():
+            interaction_lines.append(line)
+        elif "talk" in line.lower() or "chat" in line.lower() or "conversation" in line.lower():
+            talking_lines.append(line)
+        else:
+            other_lines.append(line)
     
     # Build the natural language paragraph
     paragraph_parts = []
     
-    # Add each category to the paragraph
-    for category, actions in categorized_actions.items():
-        if actions:
-            paragraph_parts.append(" ".join(actions))
+    # Start with combat actions as they're most important
+    if combat_lines:
+        paragraph_parts.extend(combat_lines)
     
-    # Combine all parts into a single paragraph
+    # Add connecting phrases between different action types
+    connectors = ["Meanwhile, ", "At the same time, ", "Nearby, ", "Elsewhere, ", "Also, "]
+    
+    # Add hallucination actions
+    if hallucination_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + hallucination_lines[0].lower())
+            hallucination_lines = hallucination_lines[1:]
+        
+        # If we have multiple hallucination lines, combine them
+        if len(hallucination_lines) > 1:
+            # Extract NPC names from the lines
+            npc_names = []
+            for line in hallucination_lines:
+                parts = line.split()
+                if "member" in line and parts.index("member") + 1 < len(parts):
+                    npc_names.append(parts[parts.index("member") + 1])
+            
+            if npc_names:
+                if len(npc_names) <= 4:
+                    npc_list = ", ".join(npc_names)
+                else:
+                    npc_list = f"{', '.join(npc_names[:4])} and {len(npc_names) - 4} others"
+                
+                paragraph_parts.append(f"while {npc_list} are seeing the walls melting.")
+    
+    # Add gardening actions
+    if gardening_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + gardening_lines[0].lower())
+            gardening_lines = gardening_lines[1:]
+    
+    # Add interaction actions
+    if interaction_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + interaction_lines[0].lower())
+            interaction_lines = interaction_lines[1:]
+    
+    # Add talking actions
+    if talking_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + talking_lines[0].lower())
+            talking_lines = talking_lines[1:]
+    
+    # Add friendly actions
+    if friendly_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + friendly_lines[0].lower())
+            friendly_lines = friendly_lines[1:]
+    
+    # Add other actions
+    if other_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + other_lines[0].lower())
+            other_lines = other_lines[1:]
+    
+    # Combine all remaining lines of each type
+    remaining_lines = (hallucination_lines + gardening_lines + interaction_lines + 
+                      talking_lines + friendly_lines + other_lines)
+    
+    # Add a few more remaining lines with connectors if we have space
+    for i, line in enumerate(remaining_lines[:3]):  # Limit to 3 more lines
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + line.lower())
+    
+    # Join everything into a single paragraph
     if active_gangs and len(active_gangs) == 1:
         gang_name = next(iter(active_gangs))
         intro = f"The {gang_name} are active in the area. "
@@ -193,7 +243,26 @@ def convert_to_natural_language(summary, active_gangs):
     else:
         intro = "NPCs are active in the area. "
     
-    return intro + " ".join(paragraph_parts)
+    # Join all parts with proper spacing and capitalization
+    result = intro
+    
+    for i, part in enumerate(paragraph_parts):
+        if i == 0:
+            # Capitalize the first sentence
+            result += part[0].upper() + part[1:]
+        else:
+            # Keep the rest as is (connectors are already capitalized)
+            result += part
+        
+        # Add period if needed
+        if not result.endswith('.') and not result.endswith('!'):
+            result += '.'
+        
+        # Add space between sentences
+        if i < len(paragraph_parts) - 1:
+            result += ' '
+    
+    return result
 
 def add_message(game, text, category=None, priority=None, source=None, is_npc_message=False):
     """
@@ -2478,260 +2547,8 @@ class Game:
         return "Invalid arguments. Usage: behavior-settings [behavior] [setting] [value] or behavior-settings [behavior] [on/off]."
     
 
-def get_random_npc_action():
-    """Return a random ordinary NPC action, categorized by behavior type."""
-    # Define actions by category for better organization and variety
-    npc_actions = {
-        # Idle behaviors - simple standing around, waiting
-        "idle": [
-            "adjusts their clothing.",
-            "looks around the area.",
-            "leans against a wall, looking bored.",
-            "stretches and yawns.",
-            "fidgets with their hands.",
-            "glances at the sky.",
-            "shuffles their feet nervously.",
-            "takes a deep breath and relaxes.",
-            "checks the time.",
-            "stares into the distance.",
-            "crosses their arms and waits.",
-            "taps their foot impatiently.",
-            "sits down for a moment.",
-            "shields their eyes from the sun.",
-            "scratches their head thoughtfully."
-        ],
-        
-        # Talk behaviors - conversations, speaking
-        "talk": [
-            "mutters something under their breath.",
-            "starts whistling a tune.",
-            "hums a catchy melody.",
-            "practices a speech to themselves.",
-            "recites what sounds like poetry.",
-            "tells a joke to anyone who'll listen.",
-            "shares a story about their day.",
-            "debates with themselves about something.",
-            "practices pickup lines.",
-            "rehearses what they'll say to their boss.",
-            "sings a verse from a popular song.",
-            "mimics someone else's voice.",
-            "calls out to a friend across the area.",
-            "gives directions to an imaginary tourist.",
-            "argues with an invisible opponent."
-        ],
-        
-        # Item interaction behaviors - examining, using items
-        "item_interaction": [
-            "picks up a small object and examines it.",
-            "checks their belongings.",
-            "kicks a small rock absentmindedly.",
-            "examines a nearby plant.",
-            "looks at their reflection in a puddle.",
-            "fiddles with a small gadget.",
-            "flips a coin repeatedly.",
-            "tests if a pen works by scribbling.",
-            "arranges items in their pockets.",
-            "polishes a small trinket.",
-            "reads something from a scrap of paper.",
-            "adjusts settings on a device.",
-            "tries to fix a broken item.",
-            "searches through their bag.",
-            "organizes their inventory carefully."
-        ],
-        
-        # Tech behaviors - using technology, hacking
-        "tech": [
-            "types rapidly on their phone.",
-            "checks for WiFi signals.",
-            "tries to improve their device's reception.",
-            "downloads an app.",
-            "takes a selfie.",
-            "scrolls through social media.",
-            "attempts to hack into a nearby system.",
-            "troubleshoots a technical problem.",
-            "updates their software.",
-            "connects devices together.",
-            "scans the area with a small device.",
-            "checks their email.",
-            "plays a quick mobile game.",
-            "sends a text message.",
-            "looks up information online."
-        ],
-        
-        # Gardening behaviors - plant-related activities
-        "gardening": [
-            "examines soil quality with their fingers.",
-            "picks a leaf and studies it.",
-            "checks plants for signs of growth.",
-            "removes a weed from a garden patch.",
-            "collects seeds from a mature plant.",
-            "measures sunlight in different spots.",
-            "sketches a garden layout.",
-            "prunes a small bush.",
-            "tests soil moisture levels.",
-            "arranges plants by height.",
-            "smells different flowers.",
-            "identifies plant species.",
-            "checks for pests on leaves.",
-            "admires a particularly healthy plant.",
-            "compares different growing methods."
-        ],
-        
-        # Suspicious behaviors - sneaky, criminal activities
-        "suspicious": [
-            "glances around nervously.",
-            "hides something quickly.",
-            "whispers into a concealed microphone.",
-            "follows someone at a distance.",
-            "takes notes on people passing by.",
-            "tests if a door is locked.",
-            "scouts for security cameras.",
-            "exchanges a package discreetly.",
-            "creates a distraction.",
-            "signals to someone out of sight.",
-            "picks up something that isn't theirs.",
-            "covers their face when passing cameras.",
-            "uses code words in conversation.",
-            "marks a location for later.",
-            "practices lockpicking techniques."
-        ]
-    }
-    
-    # First, select a random category
-    category = random.choice(list(npc_actions.keys()))
-    
-    # Then select a random action from that category
-    return random.choice(npc_actions[category])
-
-
-def get_npc_interaction(npc1_name, npc2_name):
-    """Generate a random interaction between two NPCs."""
-    # Define different types of interactions
-    interactions = {
-        # Friendly interactions
-        "friendly": [
-            f"{npc1_name} and {npc2_name} chat about the weather.",
-            f"{npc1_name} shares a joke with {npc2_name}, who laughs loudly.",
-            f"{npc1_name} shows {npc2_name} something on their phone.",
-            f"{npc1_name} and {npc2_name} exchange a friendly handshake.",
-            f"{npc1_name} gives {npc2_name} directions to somewhere.",
-            f"{npc1_name} and {npc2_name} compare notes about something.",
-            f"{npc1_name} compliments {npc2_name}'s outfit.",
-            f"{npc1_name} and {npc2_name} share a snack together.",
-            f"{npc1_name} teaches {npc2_name} a new hand gesture.",
-            f"{npc1_name} and {npc2_name} discuss their favorite foods."
-        ],
-        
-        # Hostile interactions
-        "hostile": [
-            f"{npc1_name} and {npc2_name} argue over territory.",
-            f"{npc1_name} threatens {npc2_name} with a menacing gesture.",
-            f"{npc1_name} and {npc2_name} have a heated exchange of words.",
-            f"{npc1_name} shoves {npc2_name} but they're quickly separated.",
-            f"{npc1_name} and {npc2_name} stare each other down.",
-            f"{npc1_name} mocks {npc2_name}'s gang affiliation.",
-            f"{npc1_name} and {npc2_name} circle each other suspiciously.",
-            f"{npc1_name} spits at {npc2_name}'s feet as a sign of disrespect.",
-            f"{npc1_name} and {npc2_name} exchange insults about each other's gangs.",
-            f"{npc1_name} makes a threatening gesture toward {npc2_name}."
-        ],
-        
-        # Business interactions
-        "business": [
-            f"{npc1_name} and {npc2_name} exchange small packages discreetly.",
-            f"{npc1_name} shows {npc2_name} something in a briefcase.",
-            f"{npc1_name} and {npc2_name} count money together.",
-            f"{npc1_name} hands {npc2_name} a sealed envelope.",
-            f"{npc1_name} and {npc2_name} examine a map of the area.",
-            f"{npc1_name} negotiates a deal with {npc2_name}.",
-            f"{npc1_name} and {npc2_name} shake hands after coming to an agreement.",
-            f"{npc1_name} gives {npc2_name} a small electronic device.",
-            f"{npc1_name} and {npc2_name} discuss prices for something.",
-            f"{npc1_name} shows {npc2_name} photos of merchandise."
-        ],
-        
-        # Silly interactions (for the Animal Crossing vibe)
-        "silly": [
-            f"{npc1_name} teaches {npc2_name} a silly dance move.",
-            f"{npc1_name} and {npc2_name} play rock-paper-scissors.",
-            f"{npc1_name} shows {npc2_name} their bug collection.",
-            f"{npc1_name} and {npc2_name} compare their favorite TV shows.",
-            f"{npc1_name} tries to balance something on their head while {npc2_name} watches.",
-            f"{npc1_name} and {npc2_name} make funny faces at each other.",
-            f"{npc1_name} tells {npc2_name} about a weird dream they had.",
-            f"{npc1_name} and {npc2_name} practice their superhero poses.",
-            f"{npc1_name} shows {npc2_name} a magic trick that fails hilariously.",
-            f"{npc1_name} and {npc2_name} have a staring contest."
-        ],
-        
-        # Tech interactions
-        "tech": [
-            f"{npc1_name} helps {npc2_name} fix their phone.",
-            f"{npc1_name} and {npc2_name} hack into a nearby system together.",
-            f"{npc1_name} shows {npc2_name} a new app they developed.",
-            f"{npc1_name} and {npc2_name} compare their tech gadgets.",
-            f"{npc1_name} teaches {npc2_name} how to bypass security.",
-            f"{npc1_name} and {npc2_name} set up a small device together.",
-            f"{npc1_name} explains some code to {npc2_name} on their laptop.",
-            f"{npc1_name} and {npc2_name} take apart an electronic device.",
-            f"{npc1_name} shows {npc2_name} how to use a hacking tool.",
-            f"{npc1_name} and {npc2_name} discuss the best way to secure data."
-        ],
-        
-        # Gardening interactions
-        "gardening": [
-            f"{npc1_name} shows {npc2_name} a rare seed they found.",
-            f"{npc1_name} and {npc2_name} discuss optimal growing conditions.",
-            f"{npc1_name} helps {npc2_name} plant something in the soil.",
-            f"{npc1_name} and {npc2_name} water plants together.",
-            f"{npc1_name} gives {npc2_name} gardening tips.",
-            f"{npc1_name} and {npc2_name} harvest some ripe vegetables.",
-            f"{npc1_name} shows {npc2_name} how to properly prune plants.",
-            f"{npc1_name} and {npc2_name} mix special fertilizer together.",
-            f"{npc1_name} trades seeds with {npc2_name}.",
-            f"{npc1_name} and {npc2_name} admire a particularly beautiful plant."
-        ]
-    }
-    
-    # Select a random interaction type
-    interaction_type = random.choice(list(interactions.keys()))
-    
-    # Return a random interaction of that type
-    return random.choice(interactions[interaction_type])
-
-def format_npc_action(npcs, action_template):
-    """
-    Format an NPC action with proper grammar based on the number of NPCs.
-
-    Args:
-        npcs: List of NPC names involved in the action.
-        action_template: A string template for the action, e.g., "{npcs} recite what {verb} like poetry."
-
-    Returns:
-        A grammatically correct string describing the action.
-    """
-    # Special cases for grammar overrides
-    special_cases = {
-        "recite what sounds like poetry": "{npcs} recite what sounds like poetry",
-        "connect device together": "{npcs} connect devices together",
-    }
-
-    # Handle special cases
-    if action_template in special_cases:
-        return special_cases[action_template].format(npcs=", ".join(npcs))
-
-    # Determine singular/plural forms
-    is_plural = len(npcs) > 1
-    verb = "sound" if is_plural else "sounds"
-    noun = "devices" if is_plural else "device"
-
-    # Replace placeholders in the template
-    formatted_action = action_template.format(
-        npcs=", ".join(npcs),
-        verb=verb,
-        noun=noun
-    )
-    return formatted_action
+# Import NPC action functions from npc_behavior.py
+from npc_behavior import get_random_npc_action, get_npc_interaction
 
 if __name__ == '__main__':
     game = Game()

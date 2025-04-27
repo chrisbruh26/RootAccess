@@ -1,5 +1,4 @@
-# NOT WORKING YET - still says "no effect" for hazards, should generate other actions
-
+# testing if version control is established
 
 import random
 from message_system import MessageManager, MessageCategory, MessagePriority

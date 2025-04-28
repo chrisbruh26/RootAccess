@@ -1,3 +1,5 @@
+# testing if version control is established
+
 import random
 from message_system import MessageManager, MessageCategory, MessagePriority
 
@@ -15,6 +17,10 @@ from npc_behavior_coordinator import NPCBehaviorCoordinator
         # --------------------------- #
         # NEW MESSAGE + ACTION SYSTEM #
         # --------------------------- #
+
+
+
+
 
 
 def integrate_message_systems(game):
@@ -137,8 +143,12 @@ def convert_to_natural_language(summary, active_gangs):
     friendly_lines = []
     combat_lines = []
     gardening_lines = []
+    environment_lines = []  # New category for environment changes
+    item_use_lines = []     # New category for item usage
     interaction_lines = []
     talking_lines = []
+    reaction_lines = []     # New category for NPC reactions
+    group_action_lines = [] # New category for coordinated NPC actions
     other_lines = []
     
     for line in action_lines:
@@ -149,12 +159,26 @@ def convert_to_natural_language(summary, active_gangs):
             friendly_lines.append(line)
         elif "attack" in line.lower() or "damage" in line.lower() or "fight" in line.lower():
             combat_lines.append(line)
-        elif "plant" in line.lower() or "water" in line.lower() or "harvest" in line.lower() or "garden" in line.lower():
+        # Enhanced gardening detection with more keywords
+        elif any(word in line.lower() for word in ["plant", "water", "harvest", "garden", "seed", "crop", "fertilize", "grow"]):
             gardening_lines.append(line)
-        elif "interact" in line.lower() or "using" in line.lower() or "gives" in line.lower():
+        # New environment change detection
+        elif any(word in line.lower() for word in ["changed", "transformed", "grew", "withered", "bloomed", "sprouted"]):
+            environment_lines.append(line)
+        # Enhanced item usage detection
+        elif any(word in line.lower() for word in ["use", "using", "activate", "operate", "pick up", "drop"]):
+            item_use_lines.append(line)
+        # Original interaction detection
+        elif "interact" in line.lower() or "gives" in line.lower():
             interaction_lines.append(line)
-        elif "talk" in line.lower() or "chat" in line.lower() or "conversation" in line.lower():
+        elif "talk" in line.lower() or "chat" in line.lower() or "conversation" in line.lower() or "says" in line.lower():
             talking_lines.append(line)
+        # New reaction detection
+        elif any(word in line.lower() for word in ["react", "respond", "notice", "surprised", "shocked", "impressed"]):
+            reaction_lines.append(line)
+        # New group action detection
+        elif any(word in line.lower() for word in ["together", "group", "gang", "collectively", "coordinate", "team up"]):
+            group_action_lines.append(line)
         else:
             other_lines.append(line)
     
@@ -191,11 +215,27 @@ def convert_to_natural_language(summary, active_gangs):
                 
                 paragraph_parts.append(f"while {npc_list} are seeing the walls melting.")
     
-    # Add gardening actions
+    # Add gardening actions (high priority for game focus)
     if gardening_lines:
         if paragraph_parts:
             paragraph_parts.append(random.choice(connectors) + gardening_lines[0].lower())
             gardening_lines = gardening_lines[1:]
+        # If we have multiple gardening lines, try to include more of them
+        if gardening_lines and random.random() < 0.7:  # 70% chance to include another gardening line
+            paragraph_parts.append(random.choice(connectors) + gardening_lines[0].lower())
+            gardening_lines = gardening_lines[1:]
+    
+    # Add environment change actions (high priority for game state)
+    if environment_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + environment_lines[0].lower())
+            environment_lines = environment_lines[1:]
+    
+    # Add item use actions
+    if item_use_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + item_use_lines[0].lower())
+            item_use_lines = item_use_lines[1:]
     
     # Add interaction actions
     if interaction_lines:
@@ -208,6 +248,18 @@ def convert_to_natural_language(summary, active_gangs):
         if paragraph_parts:
             paragraph_parts.append(random.choice(connectors) + talking_lines[0].lower())
             talking_lines = talking_lines[1:]
+    
+    # Add reaction actions
+    if reaction_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + reaction_lines[0].lower())
+            reaction_lines = reaction_lines[1:]
+    
+    # Add group action lines
+    if group_action_lines:
+        if paragraph_parts:
+            paragraph_parts.append(random.choice(connectors) + group_action_lines[0].lower())
+            group_action_lines = group_action_lines[1:]
     
     # Add friendly actions
     if friendly_lines:
@@ -222,8 +274,9 @@ def convert_to_natural_language(summary, active_gangs):
             other_lines = other_lines[1:]
     
     # Combine all remaining lines of each type
-    remaining_lines = (hallucination_lines + gardening_lines + interaction_lines + 
-                      talking_lines + friendly_lines + other_lines)
+    remaining_lines = (hallucination_lines + gardening_lines + environment_lines + 
+                      item_use_lines + interaction_lines + talking_lines + 
+                      reaction_lines + group_action_lines + friendly_lines + other_lines)
     
     # Add a few more remaining lines with connectors if we have space
     for i, line in enumerate(remaining_lines[:3]):  # Limit to 3 more lines
@@ -1626,6 +1679,14 @@ class Game:
         self.add_item_to_area('Backroads', 'Carrot Seed')
 
         self.add_item_to_area('Warehouse', 'Glitter Bomb')
+        self.add_item_to_area('Warehouse', 'Carrot Seed')
+        self.add_item_to_area('Warehouse', 'Carrot Seed')
+        self.add_item_to_area('Warehouse', 'Tomato Seed')
+        self.add_item_to_area('Warehouse', 'Grape Seed')
+        self.add_item_to_area('Warehouse', 'Shovel')
+        self.add_item_to_area('Warehouse', 'Watering Can')
+
+
 
 
         self.add_npc_to_area('JacksFuel', 'Jack')

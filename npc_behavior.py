@@ -52,12 +52,12 @@ class BehaviorSettings:
     def __init__(self):
         # Default behavior weights
         self.default_weights = {
-            BehaviorType.IDLE: 0.0,     # 20% chance for idle behavior (reduced from 40%)
-            BehaviorType.TALK: 0.3,      # 30% chance for talking
+            BehaviorType.IDLE: 0.0,     # 0% chance for idle behavior (reduced to prioritize other actions)
+            BehaviorType.TALK: 0.2,      # 20% chance for talking (reduced to make room for gardening)
             BehaviorType.FIGHT: 0.1,     # 10% chance for fighting
-            BehaviorType.USE_ITEM: 0.4,  # 40% chance for using items (increased to compensate)
-            BehaviorType.GARDENING: 0.0, # 0% base chance for gardening (boosted when plants/seeds present)
-            BehaviorType.GIFT: 0.0,      # 0% base chance for gifting (boosted by effects)
+            BehaviorType.USE_ITEM: 0.3,  # 30% chance for using items (reduced to make room for gardening)
+            BehaviorType.GARDENING: 0.3, # 30% base chance for gardening (significantly increased)
+            BehaviorType.GIFT: 0.1,      # 10% base chance for gifting (increased from 0%)
         }
         
         # Behavior frequency multipliers (1.0 = normal frequency, 0.5 = half frequency, 0.0 = disabled)
@@ -66,18 +66,18 @@ class BehaviorSettings:
             BehaviorType.TALK: 1.0,
             BehaviorType.FIGHT: 1.0,
             BehaviorType.USE_ITEM: 1.0,
-            BehaviorType.GARDENING: 1.0,
+            BehaviorType.GARDENING: 2.0,  # Double the frequency of gardening behaviors
             BehaviorType.GIFT: 1.0,
         }
         
         # Behavior cooldowns (in turns)
         self.cooldowns = {
-            BehaviorType.IDLE: 3,      # 3 turns between idle behaviors (increased from 0)
+            BehaviorType.IDLE: 3,      # 3 turns between idle behaviors
             BehaviorType.TALK: 2,      # 2 turns between talking
             BehaviorType.FIGHT: 1,     # 1 turn between fighting
             BehaviorType.USE_ITEM: 1,  # 1 turn between using items
-            BehaviorType.GARDENING: 2, # 2 turns between gardening activities
-            BehaviorType.GIFT: 5,      # 5 turns between gifting
+            BehaviorType.GARDENING: 0, # No cooldown between gardening activities (was 2)
+            BehaviorType.GIFT: 3,      # 3 turns between gifting (reduced from 5)
         }
         
         # Last turn each behavior was performed (per NPC)
@@ -2412,9 +2412,9 @@ class BehaviorManager:
         # Get the current turn from the game
         current_turn = game.message_manager.current_turn if hasattr(game, 'message_manager') else 0
         
-        # Base behaviors
-        behaviors = [IdleBehavior, TalkBehavior, FightBehavior, UseItemBehavior]
-        behavior_types = [BehaviorType.IDLE, BehaviorType.TALK, BehaviorType.FIGHT, BehaviorType.USE_ITEM]
+        # Base behaviors - add a dedicated gardening behavior type that will be handled by UseItemBehavior
+        behaviors = [IdleBehavior, TalkBehavior, FightBehavior, UseItemBehavior, UseItemBehavior]
+        behavior_types = [BehaviorType.IDLE, BehaviorType.TALK, BehaviorType.FIGHT, BehaviorType.USE_ITEM, BehaviorType.GARDENING]
         
         # Get the current behavior type
         current_behavior_type = self._get_behavior_type(self.current_behavior)
@@ -2425,7 +2425,8 @@ class BehaviorManager:
             adjusted_weights[BehaviorType.IDLE],
             adjusted_weights[BehaviorType.TALK],
             adjusted_weights[BehaviorType.FIGHT],
-            adjusted_weights[BehaviorType.USE_ITEM]
+            adjusted_weights[BehaviorType.USE_ITEM],
+            adjusted_weights[BehaviorType.GARDENING]  # Add gardening weight
         ]
         
         # If forcing a change, set the weight of the current behavior type to 0

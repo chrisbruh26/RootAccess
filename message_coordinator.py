@@ -73,7 +73,7 @@ class MessageCoordinator:
             "player_teleport": 0
         }
         
-        # Maximum messages per type per turn - prioritize hazard reactions
+        # Maximum messages per type per turn - prioritize hazard reactions and gardening
         self.max_messages_per_type = {
             "npc_idle": 0,                  # No idle messages shown directly (only in summary)
             "npc_talk": 1,                  # Only 1 talk message per turn
@@ -86,7 +86,7 @@ class MessageCoordinator:
             "npc_unnoticed": 0,             # No "unnoticed" messages shown directly (only in summary)
             "npc_falling_object": 2,        # Allow up to 2 falling object messages per turn
             "hazard_trigger": 1,            # Allow up to 3 hazard trigger messages per turn
-            "npc_gardening": 5,             # Allow up to 2 gardening messages per turn
+            "npc_gardening": 10,            # Allow up to 10 gardening messages per turn (increased from 5)
             "npc_resist_hazard": 5,         # Allow up to 5 resist messages per turn (increased from 3)
             "npc_item_search": 0,           # No individual item search messages (only in summary)
             "player_teleport": 1            # At most 1 teleport message per turn
@@ -169,11 +169,31 @@ class MessageCoordinator:
         # Determine message type for throttling
         message_type = self._determine_message_type(message)
         
-        # Prioritize attack messages and hazard reactions - process them first
+        # Prioritize attack messages, gardening actions, and hazard reactions - process them first
         is_priority = message_type == "npc_attack"
         if not is_priority and "attack" in message.lower():
             message_type = "npc_attack"
             is_priority = True
+            
+        # Always prioritize gardening messages with the GARDENING: prefix
+        if "GARDENING:" in message:
+            message_type = "npc_gardening"
+            is_priority = True
+            
+        # Prioritize gardening messages
+        if not is_priority and message_type == "npc_gardening":
+            is_priority = True
+        
+        # Check for gardening keywords in the message
+        if not is_priority:
+            gardening_keywords = [
+                "plant", "water", "harvest", "garden", "seed", "crop", "soil", "fertilize",
+                "grow", "weed", "prune", "flower", "vegetable", "fruit", "tomato", "carrot", 
+                "potato", "corn", "wheat"
+            ]
+            if any(keyword in message.lower() for keyword in gardening_keywords):
+                message_type = "npc_gardening"
+                is_priority = True
             
         # Also prioritize hallucination details and other hazard reactions
         if not is_priority and (message_type == "npc_hallucination_detail" or 
@@ -352,8 +372,19 @@ class MessageCoordinator:
         if any(trigger in message_lower for trigger in ["triggers the", "sets off the", "activates the", "fumbles with", "accidentally triggers"]):
             return "hazard_trigger"
             
-        # Check for gardening actions
-        if any(garden_action in message_lower for garden_action in ["waters the", "plants the", "harvests the", "applies fertilizer", "garden", "planting", "watering"]):
+        # Check for direct gardening messages first
+        if "GARDENING:" in message:
+            return "npc_gardening"
+            
+        # Check for gardening actions - expanded list of keywords
+        gardening_keywords = [
+            "waters the", "plants the", "harvests the", "applies fertilizer", 
+            "garden", "planting", "watering", "plant", "water", "harvest", 
+            "seed", "crop", "soil", "fertilize", "grow", "weed", "prune", 
+            "flower", "vegetable", "fruit", "tomato", "carrot", "potato", 
+            "corn", "wheat", "dirt", "compost"
+        ]
+        if any(garden_action in message_lower for garden_action in gardening_keywords):
             return "npc_gardening"
             
         # Check for teleport messages
@@ -420,9 +451,9 @@ class MessageCoordinator:
         elif message_type == "hazard_trigger":
             category = MessageCategory.NPC_HAZARD
             priority = MessagePriority.HIGH
-        elif message_type == "npc_gardening":
-            category = MessageCategory.NPC_INTERACTION
-            priority = MessagePriority.HIGH
+        elif message_type == "npc_gardening" or "GARDENING:" in message:
+            category = MessageCategory.NPC_GARDENING
+            priority = MessagePriority.CRITICAL  # Upgraded to CRITICAL to ensure it's always shown
         elif message_type == "npc_hallucination_detail":
             category = MessageCategory.NPC_HAZARD
             priority = MessagePriority.HIGH  # High priority for detailed hallucinations

@@ -1,4 +1,4 @@
-# if this works, version history will show this and a different comment in two distinct versions
+# if this works, version history will show this and the other comment as two versions
 
 import random
 from message_system import MessageManager, MessageCategory, MessagePriority

@@ -1,3 +1,4 @@
+# manage the way messages go out to the player - re-evaluate the necessity of it and see what I can delegate to npc behavior handlers, or elminate altogether
 """
 Message Management System for Root Access
 

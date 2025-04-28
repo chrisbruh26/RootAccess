@@ -1,4 +1,3 @@
-# manage the way messages go out to the player - re-evaluate the necessity of it and see what I can delegate to npc behavior handlers, or elminate altogether
 """
 Message Management System for Root Access
 
@@ -42,6 +41,13 @@ class MessageCategory(enum.Enum):
     AMBIENT = 13  # Ambient/environmental messages
     TRIVIAL = 14  # Very minor events
     DEBUG = 15  # Debug information
+    
+    # New categories for enhanced NPC behaviors
+    NPC_GARDENING = 16  # NPC gardening activities (planting, watering, harvesting)
+    NPC_ITEM_USE = 17   # NPC using items with real functionality
+    NPC_REACTION = 18   # NPC reactions to environment or player actions
+    ENVIRONMENT_CHANGE = 19  # Changes to the environment (crops growing, etc.)
+    NPC_GROUP_ACTION = 20  # Coordinated actions by multiple NPCs
 
 
 class MessagePriority(enum.Enum):
@@ -98,6 +104,13 @@ class MessageManager:
             MessageCategory.AMBIENT: (True, 0.8),  # Show 20% of the time
             MessageCategory.TRIVIAL: (False, 0.95),  # Show only 5% of the time
             MessageCategory.DEBUG: (False, 1.0),  # Never show (unless in debug mode)
+            
+            # New behavior-focused categories
+            MessageCategory.NPC_GARDENING: (True, 0.2),  # Show 80% of the time - highlight gardening
+            MessageCategory.NPC_ITEM_USE: (True, 0.4),  # Show 60% of the time
+            MessageCategory.NPC_REACTION: (True, 0.3),  # Show 70% of the time
+            MessageCategory.ENVIRONMENT_CHANGE: (True, 0.1),  # Show 90% of the time - important for game state
+            MessageCategory.NPC_GROUP_ACTION: (True, 0.3),  # Show 70% of the time
         }
         
         # Initialize the individual setting dictionaries from display_settings
@@ -118,6 +131,13 @@ class MessageManager:
             MessageCategory.HAZARD_EFFECT: 5,  # Show hazard effects every 5 turns at most
             MessageCategory.AMBIENT: 4,        # Show ambient messages every 4 turns at most
             MessageCategory.TRIVIAL: 10,       # Show trivial messages every 10 turns at most
+            
+            # New behavior-focused categories with appropriate cooldowns
+            MessageCategory.NPC_GARDENING: 1,  # Show gardening activities frequently
+            MessageCategory.NPC_ITEM_USE: 2,   # Show item usage every 2 turns
+            MessageCategory.NPC_REACTION: 1,   # Show reactions frequently
+            MessageCategory.ENVIRONMENT_CHANGE: 1,  # Show environment changes every turn
+            MessageCategory.NPC_GROUP_ACTION: 3,    # Show group actions every 3 turns
         }
         
         self.current_turn = 0
@@ -149,8 +169,48 @@ class MessageManager:
         text_lower = text.lower()
         
         # First check for combat messages (highest priority)
-        if "attack" in text_lower or "damage" in text_lower:
+        if "attack" in text_lower or "damage" in text_lower or "fight" in text_lower:
             return MessageCategory.COMBAT
+        
+        # Check for gardening-related messages (high priority for game focus)
+        gardening_keywords = [
+            "plant", "plants", "planting", "planted",
+            "water", "waters", "watering", "watered",
+            "harvest", "harvests", "harvesting", "harvested",
+            "grow", "grows", "growing", "grown",
+            "crop", "crops", 
+            "garden", "gardens", "gardening", "gardened",
+            "seed", "seeds", "seeding", "seeded",
+            "fertilize", "fertilizes", "fertilizing", "fertilized",
+            "soil", "dirt", "compost",
+            "weed", "weeds", "weeding", "weeded",
+            "prune", "prunes", "pruning", "pruned",
+            "flower", "flowers", "flowering", "flowered",
+            "vegetable", "vegetables",
+            "fruit", "fruits",
+            "tomato", "tomatoes",
+            "carrot", "carrots",
+            "potato", "potatoes",
+            "corn", "wheat"
+        ]
+        if any(word in text_lower for word in gardening_keywords):
+            return MessageCategory.NPC_GARDENING
+            
+        # Check for environment changes
+        if any(word in text_lower for word in ["changed", "transformed", "grew", "withered", "bloomed", "sprouted"]):
+            return MessageCategory.ENVIRONMENT_CHANGE
+            
+        # Check for item usage
+        if any(word in text_lower for word in ["use", "using", "activate", "activates", "operates", "picks up", "drops"]):
+            return MessageCategory.NPC_ITEM_USE
+            
+        # Check for NPC reactions
+        if any(word in text_lower for word in ["reacts", "responds", "notices", "surprised by", "shocked by", "impressed by"]):
+            return MessageCategory.NPC_REACTION
+            
+        # Check for group actions
+        if any(word in text_lower for word in ["together", "group", "gang", "collectively", "coordinate", "team up"]):
+            return MessageCategory.NPC_GROUP_ACTION
         
         # Check for NPC-specific categories
         if "npc" in text_lower or "member" in text_lower:
@@ -159,6 +219,14 @@ class MessageManager:
         # Check for hazard effects
         if "hazard" in text_lower or "effect" in text_lower:
             return MessageCategory.HAZARD_EFFECT
+            
+        # Check for NPC talk
+        if any(word in text_lower for word in ["says", "talks", "speaks", "shouts", "whispers", "mutters"]):
+            return MessageCategory.NPC_TALK
+            
+        # Check for NPC movement
+        if any(word in text_lower for word in ["walks", "runs", "moves", "jumps", "climbs", "sneaks"]):
+            return MessageCategory.NPC_MOVEMENT
         
         # Default to trivial if no other category matches
         return MessageCategory.TRIVIAL
@@ -183,8 +251,19 @@ class MessageManager:
             should_show = True
         
         # Override for critical priority
-        if message.priority == MessagePriority.CRITICAL:
+        if message.priority == MessagePriority.CRITICAL or message.priority == MessagePriority.HIGH:
             should_show = True
+            
+        # ALWAYS show gardening and environment change messages
+        if category in [MessageCategory.NPC_GARDENING, MessageCategory.ENVIRONMENT_CHANGE]:
+            should_show = True
+            
+        # Also check message text for gardening keywords
+        if not should_show and message.text:
+            text_lower = message.text.lower()
+            gardening_keywords = ["plant", "water", "harvest", "garden", "seed", "crop", "soil", "fertilize"]
+            if any(keyword in text_lower for keyword in gardening_keywords):
+                should_show = True
         
         # If message should be shown, mark it and update last shown time
         if should_show:
@@ -262,3 +341,25 @@ def npc_minor_message(text, priority=MessagePriority.LOW, **kwargs):
 def hazard_effect_message(text, priority=MessagePriority.LOW, **kwargs):
     """Create a hazard effect message."""
     return Message(text, MessageCategory.HAZARD_EFFECT, priority, **kwargs)
+
+# Helper functions for new message categories
+
+def npc_gardening_message(text, priority=MessagePriority.MEDIUM, **kwargs):
+    """Create a message about NPC gardening activities."""
+    return Message(text, MessageCategory.NPC_GARDENING, priority, **kwargs)
+
+def npc_item_use_message(text, priority=MessagePriority.MEDIUM, **kwargs):
+    """Create a message about NPC item usage."""
+    return Message(text, MessageCategory.NPC_ITEM_USE, priority, **kwargs)
+
+def npc_reaction_message(text, priority=MessagePriority.MEDIUM, **kwargs):
+    """Create a message about NPC reactions to events."""
+    return Message(text, MessageCategory.NPC_REACTION, priority, **kwargs)
+
+def environment_change_message(text, priority=MessagePriority.HIGH, **kwargs):
+    """Create a message about changes in the environment."""
+    return Message(text, MessageCategory.ENVIRONMENT_CHANGE, priority, **kwargs)
+
+def npc_group_action_message(text, priority=MessagePriority.MEDIUM, **kwargs):
+    """Create a message about coordinated actions by multiple NPCs."""
+    return Message(text, MessageCategory.NPC_GROUP_ACTION, priority, **kwargs)

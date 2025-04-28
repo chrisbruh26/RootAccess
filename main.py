@@ -14,6 +14,9 @@ from npc_behavior_coordinator import NPCBehaviorCoordinator
 
 
 
+
+
+
         # --------------------------- #
         # NEW MESSAGE + ACTION SYSTEM #
         # --------------------------- #
@@ -43,6 +46,13 @@ def integrate_message_systems(game):
     
     # Step 4: Store the coordinator in the game instance for easy access
     game.message_coordinator = message_coordinator
+    
+    # Step 5: Apply the direct gardening fix to ensure gardening messages are displayed
+    try:
+        from direct_gardening_fix import apply_direct_gardening_fix
+        apply_direct_gardening_fix(game)
+    except Exception as e:
+        print(f"Warning: Could not apply gardening fix: {e}")
     
     return message_coordinator
 
@@ -1364,7 +1374,8 @@ class FallingObject(Hazard):
 
         return self.group_results(results)
     
-    
+
+
     
 
 class Game:
@@ -1389,6 +1400,8 @@ class Game:
         self.create_areas()
         self.create_objects()
         self.create_npcs()
+
+        
 
         self.player = Player(self.areas.get('Home'), self.player_starting_items)
         
@@ -1708,6 +1721,28 @@ class Game:
             # Get the current location
             location_text = f"\nCurrent location: {self.player.current_area.name}"
             print(location_text)
+
+
+
+                # Get an NPC in the current area
+            npc = game.player.current_area.npcs[0] if game.player.current_area.npcs else None
+            if npc:
+                from npc_behavior import UseItemBehavior
+                # Find a seed
+                seed = None
+                for item in game.player.current_area.items:
+                    if "seed" in item.name.lower():
+                        seed = item
+                        break
+                if seed:
+                    # Create a behavior to plant the seed
+                    behavior = UseItemBehavior(npc, seed)
+                    # Execute the behavior
+                    result = behavior._plant_seed(game)
+                    print(f"Planting result: {result}")
+                
+        
+
 
             command_input = input("> ").strip()
             if not command_input:

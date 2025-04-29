@@ -181,7 +181,7 @@ class BehaviorSettings:
             BehaviorType.TALK: 0.3,     # 30% chance for talking
             BehaviorType.FIGHT: 0.1,    # 10% chance for fighting
             BehaviorType.USE_ITEM: 0.3, # 30% chance for using items
-            BehaviorType.GARDENING: 0.1,# 10% chance for gardening
+            BehaviorType.GARDENING: 0.3,# 10% chance for gardening
             BehaviorType.GIFT: 0.0,     # 0% base chance for gifting (boosted by effects)
         }
         
@@ -189,9 +189,9 @@ class BehaviorSettings:
         self.frequency_multipliers = {
             BehaviorType.IDLE: 1.0,
             BehaviorType.TALK: 1.0,
-            BehaviorType.FIGHT: 1.0,
+            BehaviorType.FIGHT: 0.1,
             BehaviorType.USE_ITEM: 1.0,
-            BehaviorType.GARDENING: 1.0,
+            BehaviorType.GARDENING: 5.0,
             BehaviorType.GIFT: 1.0,
         }
         
@@ -265,7 +265,7 @@ behavior_settings = BehaviorSettings()
 
 class NPCBehaviorCoordinator:
     """Manages NPC behaviors and enforces limits on actions per turn."""
-    def __init__(self, max_npc_actions_per_turn=5, max_actions_per_npc=1):
+    def __init__(self, max_npc_actions_per_turn=10, max_actions_per_npc=2):
         self.max_npc_actions_per_turn = max_npc_actions_per_turn
         self.max_actions_per_npc = max_actions_per_npc
         self.npc_cooldowns = {}  # Tracks cooldowns for specific NPC behaviors
@@ -385,16 +385,82 @@ class NPCBehaviorCoordinator:
         
         # General NPC behaviors
         
-        # Chance to use an item
+        # Chance to pick up items from the environment (30% chance)
+        if hasattr(npc.location, 'items') and npc.location.items and random.random() < 0.3:
+            item = random.choice(npc.location.items)
+            # Remove the item from the location and add it to NPC's inventory
+            npc.location.items.remove(item)
+            npc.add_item(item)
+            return f"{npc.name} picks up {item.name}."
+        
+        # Chance to use an item from inventory (30% chance)
         if hasattr(npc, 'items') and npc.items and random.random() < 0.3:
             item = random.choice(npc.items)
+            
+            # If it's a seed, try to plant it
+            if hasattr(item, 'crop_type') and hasattr(npc.location, 'objects'):
+                soil_plots = [obj for obj in npc.location.objects if hasattr(obj, 'add_plant')]
+                if soil_plots:
+                    soil = random.choice(soil_plots)
+                    from gardening import Plant
+                    plant = Plant(
+                        f"{item.crop_type} plant", 
+                        f"A young {item.crop_type} plant.", 
+                        item.crop_type, 
+                        item.value * 2
+                    )
+                    result = soil.add_plant(plant)
+                    if result[0]:  # Successfully planted
+                        npc.items.remove(item)
+                        return f"{npc.name} plants {item.name} in the {soil.name}."
+            
+            # If it's a consumable, use it
+            if hasattr(item, 'health_restore'):
+                if hasattr(npc, 'health'):
+                    npc.health = min(100, npc.health + item.health_restore)
+                npc.items.remove(item)
+                return f"{npc.name} consumes {item.name}."
+                
+            # Generic item use
             return f"{npc.name} uses {item.name}."
             
+        # Gardening behaviors (40% chance if there are soil plots)
+        if hasattr(npc.location, 'objects') and random.random() < 0.4:
+            soil_plots = [obj for obj in npc.location.objects if hasattr(obj, 'plants')]
+            if soil_plots:
+                soil = random.choice(soil_plots)
+                
+                # Water plants (60% chance if there are plants)
+                if soil.plants and random.random() < 0.6:
+                    result = soil.water_plants()
+                    if result[0]:  # Successfully watered
+                        if "gardening" in self.actions_data and "singular" in self.actions_data["gardening"]:
+                            action = random.choice(self.actions_data["gardening"]["singular"])
+                            return f"{npc.name} {action}."
+                        return f"{npc.name} waters the plants in the {soil.name}."
+                
+                # Harvest plants (40% chance if there are harvestable plants)
+                harvestable_plants = [p for p in soil.plants if p.is_harvestable()]
+                if harvestable_plants and random.random() < 0.4:
+                    plant = random.choice(harvestable_plants)
+                    result = soil.harvest_plant(plant.name)
+                    if result[0]:  # Successfully harvested
+                        message, harvested_item = result[1]
+                        npc.add_item(harvested_item)
+                        return f"{npc.name} harvests {plant.name} and gets {harvested_item.name}."
+        
         # Chance to talk to another NPC
         if npc.location.npcs and len(npc.location.npcs) > 1 and random.random() < 0.4:
             other_npcs = [other for other in npc.location.npcs if other != npc and other.is_alive]
             if other_npcs:
                 other = random.choice(other_npcs)
+                # Use the npc_interactions from JSON if available
+                if "npc_interactions" in self.actions_data:
+                    interaction_types = list(self.actions_data["npc_interactions"].keys())
+                    interaction_type = random.choice(interaction_types)
+                    if self.actions_data["npc_interactions"][interaction_type]:
+                        interaction = random.choice(self.actions_data["npc_interactions"][interaction_type])
+                        return interaction.format(npc1_name=npc.name, npc2_name=other.name)
                 return f"{npc.name} talks with {other.name}."
                 
         # Chance to interact with environment

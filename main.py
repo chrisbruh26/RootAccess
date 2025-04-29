@@ -217,6 +217,28 @@ class Game:
             area_list = ", ".join(sorted(self.areas.keys()))
             return f"Available areas for teleportation: {area_list}"
             
+        # NPC info command - show information about NPCs in the current area
+        if action == "npcs":
+            if not self.player.current_area.npcs:
+                return "There are no NPCs in this area."
+                
+            npc_info = []
+            for npc in self.player.current_area.npcs:
+                info = f"{npc.name}: {npc.description}"
+                
+                # Add inventory information if NPC has items
+                if hasattr(npc, 'items') and npc.items:
+                    items = ", ".join(str(item) for item in npc.items)
+                    info += f"\n  Inventory: {items}"
+                    
+                # Add health information if NPC has health
+                if hasattr(npc, 'health'):
+                    info += f"\n  Health: {npc.health}/100"
+                    
+                npc_info.append(info)
+                
+            return "NPCs in this area:\n" + "\n\n".join(npc_info)
+            
         # Teleport command
         if action == "teleport" and len(parts) > 1:
             area_name = " ".join(parts[1:])
@@ -265,6 +287,7 @@ class Game:
 - [direction] (north, south, east, west): Move in that direction
 - teleport [area]: Instantly teleport to any area by name
 - areas: List all available areas for teleportation
+- npcs: Show information about NPCs in the current area
 - look: Look around the current area
 - inventory/inv: Check your inventory
 - take [item]: Take an item from the area
@@ -304,6 +327,14 @@ class Game:
             print("\nNPC ACTIONS:")
             print(npc_summary)
             print()
+            
+        # Update plants in all areas
+        for area_name, area in self.areas.items():
+            for obj in area.objects:
+                if hasattr(obj, 'plants'):
+                    for plant in obj.plants:
+                        if hasattr(plant, 'grow') and random.random() < 0.3:  # 30% chance to grow each turn
+                            plant.grow()
     
     def run(self):
         """Run the main game loop."""

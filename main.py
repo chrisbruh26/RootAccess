@@ -24,8 +24,8 @@ class Game:
         self.npc_coordinator = NPCBehaviorCoordinator()
         self.running = True
         
-    def create_player(self, name):
-        self.player = Player(name)
+    def create_player(self):
+        self.player = Player()
         
     def create_world(self):
         # Create areas
@@ -69,7 +69,6 @@ class Game:
         self.gangs["Bloodhounds"] = Gang("Bloodhounds")
 
         # add gang members to areas
-        self.areas["warehouse"].add_npc(GangMember("Viper", "A member of the Crimson Vipers.", self.gangs["Crimson Vipers"]))
         
 
 
@@ -83,7 +82,12 @@ class Game:
             bloodhounds_names.remove(name)
             self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Bloodhounds named {name}.", self.gangs["Bloodhounds"]))
 
-        
+        self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
+
+
+        self.areas["garden"].add_npc(Civilian("Gardener", "A friendly gardener tending to the plants."))
+
+
         # Set player's starting location
         self.player.current_area = self.areas["Home"]
         
@@ -208,6 +212,31 @@ class Game:
             self.update_turn()
             return message
         
+        # Areas command - list all available areas
+        if action == "areas":
+            area_list = ", ".join(sorted(self.areas.keys()))
+            return f"Available areas for teleportation: {area_list}"
+            
+        # Teleport command
+        if action == "teleport" and len(parts) > 1:
+            area_name = " ".join(parts[1:])
+            # Find the area by name (case-insensitive)
+            target_area = next((area for name, area in self.areas.items() 
+                               if name.lower() == area_name.lower()), None)
+            
+            if not target_area:
+                # Try partial matching if exact match fails
+                target_area = next((area for name, area in self.areas.items() 
+                                   if area_name.lower() in name.lower()), None)
+                
+            if not target_area:
+                return f"No area named '{area_name}' found. Available areas: {', '.join(sorted(self.areas.keys()))}"
+            
+            # Teleport the player
+            self.player.current_area = target_area
+            self.update_turn()
+            return f"You teleport to {target_area.name}.\n\n{target_area.get_full_description()}"
+        
         # Computer-specific commands
         if action == "hack":
             computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)
@@ -234,6 +263,8 @@ class Game:
         if action == "help":
             return """Available commands:
 - [direction] (north, south, east, west): Move in that direction
+- teleport [area]: Instantly teleport to any area by name
+- areas: List all available areas for teleportation
 - look: Look around the current area
 - inventory/inv: Check your inventory
 - take [item]: Take an item from the area
@@ -277,11 +308,9 @@ class Game:
     def run(self):
         """Run the main game loop."""
         print("Welcome to Root Access!")
-        player_name = input("Enter your name: ")
-        self.create_player(player_name)
+        self.create_player()
         self.create_world()
         
-        print(f"\nWelcome, {self.player.name}!")
         print(self.player.current_area.get_full_description())
         
         while self.running:

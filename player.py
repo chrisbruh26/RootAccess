@@ -2,8 +2,7 @@ from items import Consumable
 from gardening import Seed, Plant
 
 class Player:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
         self.inventory = []
         self.health = 100
         self.max_health = 100
@@ -52,6 +51,10 @@ class Player:
             if result[0]:
                 self.inventory.remove(item)
             return result
+            
+        # Handle weapons
+        if hasattr(item, 'use'):
+            return item.use(self, game)
         
         # Handle other items
         return False, f"You can't use the {item.name} right now."

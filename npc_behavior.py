@@ -106,6 +106,10 @@ class GangMember(NPC):
         return None
 
     def attack_player(self, player):
+        # If player is hidden, can't attack
+        if player.hidden:
+            return None
+            
         # Check if NPC is hallucinating - can't attack while hallucinating
         if any(hasattr(effect, 'affects_combat') and effect.affects_combat() for effect in self.active_effects):
             # Get a hallucination message if available
@@ -115,6 +119,11 @@ class GangMember(NPC):
                 elif hasattr(effect, 'get_hallucination_message'):
                     return f"{self.name} {effect.get_hallucination_message()} instead of attacking you."
             return f"{self.name} is too distracted to attack you."
+        
+        # Check if this gang has detected the player
+        if self.gang not in player.detected_by:
+            # Can't attack if haven't detected
+            return None
             
         # Simple combat logic
         damage = random.randint(5, 15)
@@ -178,8 +187,38 @@ class GangMember(NPC):
                 if hasattr(effect, 'get_hallucination_message'):
                     return f"{self.name} {effect.get_hallucination_message()}."
             return None
+        
+        # If player is hidden, drastically reduce detection chance
+        if player.hidden:
+            # Calculate stealth bonus from hiding spot
+            stealth_bonus = 0
+            if player.hiding_spot:
+                stealth_bonus = player.hiding_spot.stealth_bonus
+                
+            # Almost impossible to detect when hidden
+            modified_detection_chance = self.detection_chance * (1 - stealth_bonus)
             
-        # Base detection chance modified by distance, player actions, etc.
+            # Very small chance to detect even when hidden
+            if random.random() < modified_detection_chance * 0.1:  # 10% of already reduced chance
+                self.has_detected_player = True
+                player.detected_by.add(self.gang)
+                
+                # Force player out of hiding
+                player.hidden = False
+                if player.hiding_spot:
+                    player.hiding_spot.is_occupied = False
+                    player.hiding_spot.occupant = None
+                player.hiding_spot = None
+                
+                # Set a cooldown before the NPC can detect again if the player escapes
+                self.detection_cooldown = 3
+                
+                return f"{self.name} discovers your hiding spot and drags you out!"
+            
+            # Most of the time, hidden players aren't detected
+            return None
+            
+        # Base detection chance for non-hidden players
         detection_roll = random.random()
         
         if detection_roll < self.detection_chance:

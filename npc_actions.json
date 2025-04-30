@@ -109,28 +109,6 @@
       "prune the plants with precision"
     ]
   },
-  "hallucination": {
-    "singular": [
-      "stares at their hands in amazement",
-      "swats at invisible insects",
-      "talks to someone who isn't there",
-      "watches the walls melt",
-      "giggles at nothing in particular",
-      "follows patterns only they can see",
-      "dances to music no one else hears",
-      "points at strange visions in the air"
-    ],
-    "plural": [
-      "stare at their hands in amazement",
-      "swat at invisible insects",
-      "talk to people who aren't there",
-      "watch the walls melt",
-      "giggle at nothing in particular",
-      "follow patterns only they can see",
-      "dance to music no one else hears",
-      "point at strange visions in the air"
-    ]
-  },
   "tech": {
     "singular": [
       "hacks into a nearby system",

@@ -130,10 +130,14 @@ class Game:
 
         # add 5 NPCs from the bloodhounds_name list to the warehouse
 
+        gun = Weapon("Gun", "A standard firearm.", 50, 20)
+
         for i in range(5):
             name = random.choice(bloodhounds_names)
             bloodhounds_names.remove(name)
             self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Bloodhounds named {name}.", self.gangs["Bloodhounds"]))
+            # add a gun to inventory of each gang member
+            self.areas["warehouse"].npcs[-1].add_item(gun)
             self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
 
         

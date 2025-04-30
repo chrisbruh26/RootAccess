@@ -5,7 +5,7 @@ import json
 # Import game modules
 from items import Item, Weapon, Consumable
 from gardening import Seed, Plant, SoilPlot
-from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk
+from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
 from npc_behavior import NPC, Civilian, Gang, GangMember, BehaviorType, BehaviorSettings, NPCBehaviorCoordinator, behavior_settings
 from objects import Computer
 from player import Player
@@ -64,6 +64,22 @@ class Game:
         self.areas["street"].add_item(Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20))
         self.areas["alley"].add_item(Weapon("Pipe", "A metal pipe that can be used as a weapon.", 15, 10))
         
+        # create better weapons
+
+        # Hacked Milk Blaster - causes hallucinations
+        hacked_milk_blaster = Weapon("Hacked Milk Blaster", "A strange weapon that shoots hacked milk.", 50, 20)
+        hacked_milk_blaster.add_effect(HallucinationEffect())
+        self.areas["warehouse"].add_item(hacked_milk_blaster)
+        
+        # Confusion Ray - causes confusion
+        confusion_ray = Weapon("Confusion Ray", "A device that emits waves that confuse the target.", 60, 15)
+        confusion_ray.add_effect(ConfusionEffect())
+        self.areas["alley"].add_item(confusion_ray)
+        self.areas["Home"].add_item(hacked_milk_blaster)
+
+
+
+
         # Create gangs
         self.gangs["Crimson Vipers"] = Gang("Crimson Vipers")
         self.gangs["Bloodhounds"] = Gang("Bloodhounds")

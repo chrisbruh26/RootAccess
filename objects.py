@@ -65,3 +65,43 @@ class Computer:
     def __str__(self):
         status = "hacked" if self.is_hacked else "locked"
         return f"{self.name} ({status})"
+
+class HidingSpot:
+    """A place where the player can hide from NPCs."""
+    def __init__(self, name, description, stealth_bonus=0.5):
+        self.name = name
+        self.description = description
+        self.stealth_bonus = stealth_bonus  # Reduces detection chance by this percentage
+        self.is_occupied = False
+        self.occupant = None
+    
+    def hide(self, player):
+        """Player attempts to hide in this spot."""
+        if self.is_occupied:
+            return False, f"Someone is already hiding in the {self.name}."
+        
+        self.is_occupied = True
+        self.occupant = player
+        player.hidden = True
+        player.hiding_spot = self
+        
+        # Clear detection status when hiding
+        player.detected_by.clear()
+        
+        return True, f"You hide in the {self.name}. Gang members won't be able to detect you while you're hidden."
+    
+    def leave(self, player):
+        """Player leaves the hiding spot."""
+        if self.occupant != player:
+            return False, "You're not hiding here."
+        
+        self.is_occupied = False
+        self.occupant = None
+        player.hidden = False
+        player.hiding_spot = None
+        
+        return True, f"You emerge from the {self.name}."
+    
+    def __str__(self):
+        status = "occupied" if self.is_occupied else "empty"
+        return f"{self.name} ({status})"

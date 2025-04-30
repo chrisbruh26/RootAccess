@@ -1,0 +1,87 @@
+{
+  "hallucination": {
+    "singular": [
+      "stares at their hands in amazement",
+      "swats at invisible insects",
+      "talks to someone who isn't there",
+      "watches the walls melt",
+      "giggles at nothing in particular",
+      "follows patterns only they can see",
+      "dances to music no one else hears",
+      "points at strange visions in the air",
+      "sees rainbow colors everywhere",
+      "thinks the walls are melting",
+      "is having a deep conversation with a plant",
+      "thinks they're floating slightly above the ground",
+      "watches invisible butterflies",
+      "keeps saying 'whoa' over and over",
+      "tries to catch digital particles in the air",
+      "thinks their fingers are made of spaghetti",
+      "is convinced they can taste colors",
+      "believes they've turned into a digital avatar",
+      "tries to pet imaginary creatures",
+      "waves at nothing in particular"
+    ],
+    "plural": [
+      "stare at their hands in amazement",
+      "swat at invisible insects",
+      "talk to people who aren't there",
+      "watch the walls melt",
+      "giggle at nothing in particular",
+      "follow patterns only they can see",
+      "dance to music no one else hears",
+      "point at strange visions in the air",
+      "see rainbow colors everywhere",
+      "think the walls are melting",
+      "have deep conversations with plants",
+      "think they're floating slightly above the ground",
+      "watch invisible butterflies",
+      "keep saying 'whoa' over and over",
+      "try to catch digital particles in the air",
+      "think their fingers are made of spaghetti",
+      "are convinced they can taste colors",
+      "believe they've turned into digital avatars",
+      "try to pet imaginary creatures",
+      "wave at nothing in particular"
+    ],
+    "combat_prevention": [
+      "is too distracted by hallucinations to fight",
+      "forgot what fighting even is",
+      "is busy contemplating the universe",
+      "can't tell friend from foe right now",
+      "thinks weapons are actually flowers"
+    ]
+  },
+  "confusion": {
+    "singular": [
+      "looks completely confused",
+      "spins in circles",
+      "can't remember what they were doing",
+      "looks around with a puzzled expression",
+      "seems to have forgotten where they are"
+    ],
+    "plural": [
+      "look completely confused",
+      "spin in circles",
+      "can't remember what they were doing",
+      "look around with puzzled expressions",
+      "seem to have forgotten where they are"
+    ]
+  },
+  "fear": {
+    "singular": [
+      "trembles with fear",
+      "looks terrified",
+      "backs away slowly",
+      "hides behind anything available",
+      "is too scared to move"
+    ],
+    "plural": [
+      "tremble with fear",
+      "look terrified",
+      "back away slowly",
+      "hide behind anything available",
+      "are too scared to move"
+    ]
+  }
+}

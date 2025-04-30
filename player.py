@@ -10,6 +10,8 @@ class Player:
         self.current_area = None
         self.active_effects = {}  # Dictionary of effect name -> turns remaining
         self.detected_by = set()  # Set of gangs that have detected the player
+        self.hidden = False  # Whether the player is currently hidden
+        self.hiding_spot = None  # The hiding spot the player is using
     
     def add_item(self, item):
         self.inventory.append(item)

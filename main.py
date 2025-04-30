@@ -91,14 +91,33 @@ class Game:
         bloodhounds_names = ["Buck", "Bubbles", "Boop", "Noodle", "Flop", "Squirt", "Squeaky", "Gus-Gus", "Puddles", "Muffin", "Binky", "Beep-Beep"]
         
 
+        # create crimson vipers names list
+        crimson_vipers_names = ["Vipoop", "Snakle", "Rattlesnop", "Pythirt", "Anaceaky", "Cobrus-brus", "Lizuddles", "Viperino", "Slitherpuff", "Hissypants", "Slinker", "Snakester"]
+        # choose random name to create a Crimson Vipers gang member
+        name = random.choice(crimson_vipers_names)
+        self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Crimson Vipers named {name}.", self.gangs["Crimson Vipers"]))
+
+
+
+
+
         # add 5 NPCs from the bloodhounds_name list to the warehouse
 
         for i in range(5):
             name = random.choice(bloodhounds_names)
             bloodhounds_names.remove(name)
             self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Bloodhounds named {name}.", self.gangs["Bloodhounds"]))
+            self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
+
+        
+
+
+
+        self.areas["warehouse"].add_npc(Civilian("John", "A random guy."))
 
         self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
+
+
 
 
         self.areas["garden"].add_npc(Civilian("Gardener", "A friendly gardener tending to the plants."))

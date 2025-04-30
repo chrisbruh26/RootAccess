@@ -135,6 +135,16 @@ class GangMember(NPC):
                 elif hasattr(effect, 'get_hallucination_message'):
                     return f"{self.name} {effect.get_hallucination_message()} instead of attacking {target_npc.name}."
             return f"{self.name} is too distracted to attack {target_npc.name}."
+        
+        # check type of each npc and compare, only allowing them to attack each other if different types, like different gang
+        
+
+        # if npc is not a gang member, or target npc is not a gang member, return None. elif they're both gang members but same gang, return None
+        if not isinstance(target_npc, GangMember):
+            return None
+        elif self.gang.name == target_npc.gang.name:
+            return None
+
             
         damage = random.randint(5, 15)
         
@@ -588,7 +598,7 @@ class NPCBehaviorCoordinator:
             summary_parts.extend(combat_actions)
         
         # Add connecting phrases between different action types
-        connectors = ["Meanwhile, ", "At the same time, ", "Nearby, ", "Elsewhere, ", "Also, ", "; ", "Behind them, "]
+        connectors = ["Meanwhile, ", "At the same time, ", "Nearby, ", "Elsewhere, ", "Also, ", "Fascinatingly, ", "Interestingly, ", "Wide awake, "]
         
         # Add other action types with connectors
         action_groups = [gang_actions, item_actions, talk_actions, other_actions]

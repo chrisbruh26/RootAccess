@@ -111,15 +111,15 @@ class GangMember(NPC):
             # Get a hallucination message if available
             for effect in self.active_effects:
                 if hasattr(effect, 'get_combat_prevention_message'):
-                    return f"The {self.gang.name} member {self.name} {effect.get_combat_prevention_message()} instead of attacking you."
+                    return f"{self.name} {effect.get_combat_prevention_message()} instead of attacking you."
                 elif hasattr(effect, 'get_hallucination_message'):
-                    return f"The {self.gang.name} member {self.name} {effect.get_hallucination_message()} instead of attacking you."
-            return f"The {self.gang.name} member {self.name} is too distracted to attack you."
+                    return f"{self.name} {effect.get_hallucination_message()} instead of attacking you."
+            return f"{self.name} is too distracted to attack you."
             
         # Simple combat logic
         damage = random.randint(5, 15)
         player.health -= damage
-        return f"The {self.gang.name} member {self.name} attacks you for {damage} damage!"
+        return f"{self.name} attacks you for {damage} damage!"
 
     def attack_npc(self, target_npc):
         # Simple NPC-to-NPC combat
@@ -131,10 +131,10 @@ class GangMember(NPC):
             # Get a hallucination message if available
             for effect in self.active_effects:
                 if hasattr(effect, 'get_combat_prevention_message'):
-                    return f"The {self.gang.name} member {self.name} {effect.get_combat_prevention_message()} instead of attacking {target_npc.name}."
+                    return f"{self.name} {effect.get_combat_prevention_message()} instead of attacking {target_npc.name}."
                 elif hasattr(effect, 'get_hallucination_message'):
-                    return f"The {self.gang.name} member {self.name} {effect.get_hallucination_message()} instead of attacking {target_npc.name}."
-            return f"The {self.gang.name} member {self.name} is too distracted to attack {target_npc.name}."
+                    return f"{self.name} {effect.get_hallucination_message()} instead of attacking {target_npc.name}."
+            return f"{self.name} is too distracted to attack {target_npc.name}."
             
         damage = random.randint(5, 15)
         
@@ -147,13 +147,13 @@ class GangMember(NPC):
                 target_npc.is_alive = False
                 if hasattr(target_npc, 'gang'):
                     target_npc.gang.remove_member(target_npc)
-                return f"The {self.gang.name} member {self.name} attacks {target_npc.name} for {damage} damage, defeating them!"
+                return f"{self.name} attacks {target_npc.name} for {damage} damage, defeating them!"
             
-            return f"The {self.gang.name} member {self.name} attacks {target_npc.name} for {damage} damage!"
+            return f"{self.name} attacks {target_npc.name} for {damage} damage!"
         else:
             # For NPCs without health attribute
             target_npc.is_alive = False
-            return f"The {self.gang.name} member {self.name} attacks and defeats {target_npc.name}!"
+            return f"{self.name} attacks and defeats {target_npc.name}!"
 
     def detect_player(self, player, game):
         """Attempt to detect the player based on detection chance."""
@@ -166,7 +166,7 @@ class GangMember(NPC):
             # Get a hallucination message if available
             for effect in self.active_effects:
                 if hasattr(effect, 'get_hallucination_message'):
-                    return f"The {self.gang.name} member {self.name} {effect.get_hallucination_message()}."
+                    return f"{self.name} {effect.get_hallucination_message()}."
             return None
             
         # Base detection chance modified by distance, player actions, etc.
@@ -179,7 +179,7 @@ class GangMember(NPC):
             # Set a cooldown before the NPC can detect again if the player escapes
             self.detection_cooldown = 3
             
-            return f"The {self.gang.name} member {self.name} spots you and becomes hostile!"
+            return f"{self.name} spots you and becomes hostile!"
         
         return None
 
@@ -395,14 +395,14 @@ class NPCBehaviorCoordinator:
                     # Check for hallucination effect
                     if isinstance(effect, HallucinationEffect) or (hasattr(effect, 'get_hallucination_message') and hasattr(effect, 'affects_combat') and effect.affects_combat()):
                         is_affected = True
-                        return f"The {npc.gang.name} member {npc.name} {effect.get_hallucination_message()}."
+                        return f"{npc.name} {effect.get_hallucination_message()}."
                     
                     # Check for confusion effect
                     elif isinstance(effect, ConfusionEffect) or (hasattr(effect, 'get_confusion_message') and hasattr(effect, 'affects_combat')):
                         # Confusion may or may not prevent combat
                         if effect.affects_combat():
                             is_affected = True
-                            return f"The {npc.gang.name} member {npc.name} {effect.get_confusion_message()}."
+                            return f"{npc.name} {effect.get_confusion_message()}."
             
             # If affected by an effect that prevents combat, skip combat behaviors
             if is_affected:

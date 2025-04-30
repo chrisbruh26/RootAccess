@@ -7,7 +7,7 @@ from items import Item, Weapon, Consumable
 from gardening import Seed, Plant, SoilPlot
 from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
 from npc_behavior import NPC, Civilian, Gang, GangMember, BehaviorType, BehaviorSettings, NPCBehaviorCoordinator, behavior_settings
-from objects import Computer
+from objects import Computer, HidingSpot
 from player import Player
 from area import Area
 
@@ -35,6 +35,7 @@ class Game:
         self.areas["alley"] = Area("Alley", "A dark alley between buildings.")
         self.areas["plaza"] = Area("Plaza", "A large open plaza with a fountain in the center.")
         self.areas["warehouse"] = Area("Warehouse", "An abandoned warehouse, taken over by the Bloodhounds.")
+        self.areas["construction"] = Area("Construction Site", "A construction site with various equipment and materials.")
         
         # Connect areas
         self.areas["Home"].add_connection("north", self.areas["garden"])
@@ -47,6 +48,8 @@ class Game:
         self.areas["alley"].add_connection("west", self.areas["street"])
         self.areas["street"].add_connection("south", self.areas["warehouse"])
         self.areas["warehouse"].add_connection("north", self.areas["street"])
+        self.areas["plaza"].add_connection("east", self.areas["construction"])
+        self.areas["construction"].add_connection("west", self.areas["plaza"])
         
         # Add objects to areas
         soil_plot = SoilPlot()
@@ -56,6 +59,30 @@ class Game:
         computer = Computer("Hacking Terminal", "A specialized terminal for hacking operations.")
         computer.programs = ["data_miner", "security_override", "plant_hacker"]
         self.areas["Home"].add_object(computer)
+        
+        # Add hiding spots to areas
+        closet = HidingSpot("Closet", "A small closet that you can hide in.", 0.8)
+        self.areas["Home"].add_object(closet)
+        
+        bushes = HidingSpot("Bushes", "Dense bushes that provide good cover.", 0.7)
+        self.areas["garden"].add_object(bushes)
+        
+        dumpster = HidingSpot("Dumpster", "A large dumpster you can hide behind.", 0.6)
+        self.areas["alley"].add_object(dumpster)
+        
+        fountain = HidingSpot("Fountain", "A large fountain with decorative elements to hide behind.", 0.5)
+        self.areas["plaza"].add_object(fountain)
+        
+        crates = HidingSpot("Crates", "Stacked crates that provide decent cover.", 0.6)
+        self.areas["warehouse"].add_object(crates)
+        
+        # Add construction containers as hiding spots
+        container1 = HidingSpot("Construction Container", "A large metal container used for storing construction materials.", 0.9)
+        container2 = HidingSpot("Equipment Shed", "A small shed for storing construction equipment.", 0.8)
+        container3 = HidingSpot("Cement Mixer", "A large cement mixer you can hide behind.", 0.7)
+        self.areas["warehouse"].add_object(container1)
+        self.areas["warehouse"].add_object(container2)
+        self.areas["warehouse"].add_object(container3)
         
         # Add items to areas
         self.areas["Home"].add_item(Item("Backpack", "A sturdy backpack for carrying items.", 20))
@@ -138,6 +165,13 @@ class Game:
         
         # Movement commands
         if action in self.player.current_area.connections:
+            # If player is hidden, they need to unhide first
+            if self.player.hidden:
+                hiding_spot = self.player.hiding_spot
+                result = hiding_spot.leave(self.player)
+                self.update_turn()
+                return f"{result[1]}\nYou move {action} to {self.player.current_area.connections[action].name}.\n\n{self.player.current_area.connections[action].get_full_description()}"
+            
             self.player.current_area = self.player.current_area.connections[action]
             self.update_turn()
             return f"You move {action} to {self.player.current_area.name}.\n\n{self.player.current_area.get_full_description()}"
@@ -316,6 +350,54 @@ class Game:
                 self.update_turn()
             return result[1]
         
+        # Hide command
+        if action == "hide" and len(parts) > 1:
+            # Check if player is already hidden
+            if self.player.hidden:
+                return "You are already hiding."
+            
+            # Find the hiding spot by name
+            hiding_spot_name = " ".join(parts[1:])
+            hiding_spot = next((obj for obj in self.player.current_area.objects 
+                              if isinstance(obj, HidingSpot) and obj.name.lower() == hiding_spot_name.lower()), None)
+            
+            if not hiding_spot:
+                # Try partial matching
+                hiding_spot = next((obj for obj in self.player.current_area.objects 
+                                  if isinstance(obj, HidingSpot) and hiding_spot_name.lower() in obj.name.lower()), None)
+            
+            if not hiding_spot:
+                # List available hiding spots
+                hiding_spots = [obj.name for obj in self.player.current_area.objects if isinstance(obj, HidingSpot)]
+                if hiding_spots:
+                    return f"There is no '{hiding_spot_name}' to hide in. Available hiding spots: {', '.join(hiding_spots)}"
+                else:
+                    return "There are no hiding spots in this area."
+            
+            # Try to hide
+            result = hiding_spot.hide(self.player)
+            if result[0]:
+                self.update_turn()
+            return result[1]
+        
+        # Unhide command
+        if action == "unhide" or action == "emerge":
+            if not self.player.hidden:
+                return "You are not currently hiding."
+            
+            result = self.player.hiding_spot.leave(self.player)
+            if result[0]:
+                self.update_turn()
+            return result[1]
+            
+        # List hiding spots command
+        if action == "hiding_spots" or action == "hidingspots":
+            hiding_spots = [obj.name for obj in self.player.current_area.objects if isinstance(obj, HidingSpot)]
+            if hiding_spots:
+                return f"Available hiding spots in this area: {', '.join(hiding_spots)}"
+            else:
+                return "There are no hiding spots in this area."
+        
         # Help command
         if action == "help":
             return """Available commands:
@@ -334,6 +416,9 @@ class Game:
 - harvest [plant]: Harvest a fully grown plant
 - hack: Hack a computer
 - run [program]: Run a program on a hacked computer
+- hide [spot]: Hide in a hiding spot to avoid detection
+- unhide/emerge: Come out of hiding
+- hiding_spots: List all available hiding spots in the area
 - help: Show this help message
 - quit: Exit the game"""
         
@@ -359,10 +444,33 @@ class Game:
         # Display NPC action summary
         npc_summary = self.npc_coordinator.get_npc_summary()
         if npc_summary:
+            # If player is hidden, add a stealth indicator
+            if self.player.hidden:
+                print("\n[STEALTH MODE ACTIVE]")
+            
             print("\nNPC ACTIONS:")
             print(npc_summary)
             print()
+        
+        # If player is hidden, there's a small chance they get discovered anyway
+        if self.player.hidden and random.random() < 0.05:  # 5% chance per turn
+            # Only if there are gang members in the area
+            gang_members = [npc for npc in self.player.current_area.npcs 
+                           if isinstance(npc, GangMember) and npc.is_alive]
             
+            if gang_members and random.random() < 0.3:  # 30% chance if there are gang members
+                # Player is discovered!
+                discovered_by = random.choice(gang_members)
+                self.player.hidden = False
+                self.player.hiding_spot.is_occupied = False
+                self.player.hiding_spot.occupant = None
+                self.player.hiding_spot = None
+                
+                # Add the gang to detected_by
+                self.player.detected_by.add(discovered_by.gang)
+                
+                print(f"\n{discovered_by.name} has discovered your hiding spot! You are no longer hidden.")
+        
         # Update plants in all areas
         for area_name, area in self.areas.items():
             for obj in area.objects:

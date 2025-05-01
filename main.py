@@ -25,6 +25,56 @@ class Game:
         self.npc_coordinator = NPCBehaviorCoordinator()
         self.running = True
         
+        # Initialize command system
+        self.commands = {
+            # Movement commands
+            'north': {'handler': self.cmd_move, 'category': 'movement'},
+            'south': {'handler': self.cmd_move, 'category': 'movement'},
+            'east': {'handler': self.cmd_move, 'category': 'movement'},
+            'west': {'handler': self.cmd_move, 'category': 'movement'},
+            'move': {'handler': self.cmd_move, 'category': 'movement'},
+            'go': {'handler': self.cmd_move, 'category': 'movement'},
+            'areas': {'handler': self.cmd_areas, 'category': 'movement'},
+            
+            # Add teleport commands
+            'teleport': {'handler': self.cmd_teleport, 'category': 'movement'},
+            'tp': {'handler': self.cmd_teleport, 'category': 'movement'},
+            
+            # Basic interaction commands
+            'look': {'handler': self.cmd_look, 'category': 'interaction'},
+            'inventory': {'handler': self.cmd_inventory, 'category': 'interaction'},
+            'inv': {'handler': self.cmd_inventory, 'category': 'interaction'},
+            'take': {'handler': self.cmd_take, 'category': 'interaction'},
+            'drop': {'handler': self.cmd_drop, 'category': 'interaction'},
+            'use': {'handler': self.cmd_use, 'category': 'interaction'},
+            'interact': {'handler': self.cmd_interact, 'category': 'interaction'},
+            'npcs': {'handler': self.cmd_npcs, 'category': 'interaction'},
+            
+            # Add breaking mechanic command
+            'break': {'handler': self.cmd_break, 'category': 'interaction'},
+            'smash': {'handler': self.cmd_break, 'category': 'interaction'},
+            'shoot': {'handler': self.cmd_break, 'category': 'interaction'},
+            
+            # Plant/garden commands
+            'plant': {'handler': self.cmd_plant, 'category': 'gardening'},
+            'water': {'handler': self.cmd_water, 'category': 'gardening'},
+            'harvest': {'handler': self.cmd_harvest, 'category': 'gardening'},
+            
+            # Hiding commands
+            'hide': {'handler': self.cmd_hide, 'category': 'stealth'},
+            'unhide': {'handler': self.cmd_unhide, 'category': 'stealth'},
+            'emerge': {'handler': self.cmd_unhide, 'category': 'stealth'},
+            'hiding_spots': {'handler': self.cmd_hiding_spots, 'category': 'stealth'},
+            
+            # Tech commands
+            'hack': {'handler': self.cmd_hack, 'category': 'tech'},
+            'run': {'handler': self.cmd_run_program, 'category': 'tech'},
+            
+            # System commands
+            'help': {'handler': self.cmd_help, 'category': 'system'},
+            'quit': {'handler': self.cmd_quit, 'category': 'system'},
+        }
+
     def create_player(self):
         self.player = Player()
         
@@ -209,329 +259,354 @@ class Game:
             return "Please enter a command."
         
         action = parts[0]
-        
-        # Movement commands
-        if action in self.player.current_area.connections:
+        args = parts[1:]
+
+        # Check if command exists in command system
+        cmd_entry = self.commands.get(action)
+        if cmd_entry:
+            return cmd_entry['handler'](args)
+
+        return "Unknown command. Type 'help' for a list of commands."
+
+    # Command handlers
+    def cmd_move(self, args):
+        """Process movement command. Usage: move [direction] or just [direction]"""
+        if not args:
+            return "Move where? Specify a direction."
+        direction = args[0].lower()
+        if direction in self.player.current_area.connections:
             # If player is hidden, they need to unhide first
             if self.player.hidden:
                 hiding_spot = self.player.hiding_spot
                 result = hiding_spot.leave(self.player)
                 self.update_turn()
-                return f"{result[1]}\nYou move {action} to {self.player.current_area.connections[action].name}.\n\n{self.player.current_area.connections[action].get_full_description()}"
+                return f"{result[1]}\nYou move {direction} to {self.player.current_area.connections[direction].name}.\n\n{self.player.current_area.connections[direction].get_full_description()}"
             
-            self.player.current_area = self.player.current_area.connections[action]
+            self.player.current_area = self.player.current_area.connections[direction]
             self.update_turn()
-            return f"You move {action} to {self.player.current_area.name}.\n\n{self.player.current_area.get_full_description()}"
-        
-        # Look command
-        if action == "look":
-            return self.player.current_area.get_full_description()
-        
-        # Inventory command
-        if action == "inventory" or action == "inv":
-            if not self.player.inventory:
-                return "Your inventory is empty."
-            items = ", ".join(str(item) for item in self.player.inventory)
-            return f"Inventory: {items}"
-        
-        # Take command
-        if action == "take" and len(parts) > 1:
-            item_name = " ".join(parts[1:])
-            item = self.player.current_area.remove_item(item_name)
-            if item:
-                self.player.add_item(item)
-                self.update_turn()
-                return f"You take the {item.name}."
-            return f"There is no {item_name} here."
-        
-        # Drop command
-        if action == "drop" and len(parts) > 1:
-            item_name = " ".join(parts[1:])
-            item = self.player.remove_item(item_name)
-            if item:
-                self.player.current_area.add_item(item)
-                self.update_turn()
-                return f"You drop the {item.name}."
-            return f"You don't have a {item_name}."
-        
-        # Use command
-        if action == "use" and len(parts) > 1:
-            item_name = " ".join(parts[1:])
-            result = self.player.use_item(item_name, self)
-            if result[0]:
-                self.update_turn()
-                return result[1]
-            return result[1]
-        
-        # Interact with objects
-        if action == "interact" and len(parts) > 1:
-            object_name = " ".join(parts[1:])
-            obj = next((o for o in self.player.current_area.objects if o.name.lower() == object_name.lower()), None)
-            if not obj:
-                return f"There is no {object_name} here."
-            
-            # Handle different object types
-            if isinstance(obj, SoilPlot):
-                plants = ", ".join(str(plant) for plant in obj.plants) if obj.plants else "none"
-                return f"Soil Plot: {plants}"
-            elif isinstance(obj, Computer):
-                return f"Computer: {obj.description}"
-            
-            return f"You interact with the {obj.name}."
-        
-        # Plant-specific commands
-        if action == "plant" and len(parts) > 1:
-            seed_name = " ".join(parts[1:])
-            seed = next((i for i in self.player.inventory if i.name.lower() == seed_name.lower() and isinstance(i, Seed)), None)
-            if not seed:
-                return f"You don't have a {seed_name}."
-            
-            soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
-            if not soil:
-                return "There's no soil here to plant seeds."
-            
-            plant = Plant(
-                f"{seed.crop_type} plant", 
-                f"A young {seed.crop_type} plant.", 
-                seed.crop_type, 
-                seed.value * 2
-            )
-            
-            result = soil.add_plant(plant)
-            if result[0]:
-                self.player.inventory.remove(seed)
-                self.update_turn()
-            return result[1]
-        
-        if action == "water":
-            soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
-            if not soil:
-                return "There are no plants here to water."
-            
-            # Check if the player has a watering can
-            watering_can = next((item for item in self.player.inventory if isinstance(item, WateringCan)), None)
-            if not watering_can:
-                return "You need a watering can to water plants."
-            
-            # Use the watering can to water the plants
-            result = soil.water_plants(watering_can=watering_can)
-            if result[0]:
-                self.update_turn()
-            return result[1]
-        
-        if action == "harvest" and len(parts) > 1:
-            plant_name = " ".join(parts[1:])
-            soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
-            if not soil:
-                return "There are no plants here to harvest."
-            
-            result = soil.harvest_plant(plant_name)
-            if not result[0]:
-                return result[1]
-            
-            message, harvested_item = result[1]
-            self.player.add_item(harvested_item)
+            return f"You move {direction} to {self.player.current_area.name}.\n\n{self.player.current_area.get_full_description()}"
+        return "You can't go that way."
+
+    def cmd_look(self, args):
+        """Look around the current area."""
+        return self.player.current_area.get_full_description()
+
+    def cmd_inventory(self, args):
+        """Check your inventory."""
+        if not self.player.inventory:
+            return "Your inventory is empty."
+        items = ", ".join(str(item) for item in self.player.inventory)
+        return f"Inventory: {items}"
+
+    def cmd_take(self, args):
+        """Take an item from the area."""
+        if not args:
+            return "Take what? Specify an item."
+        item_name = " ".join(args)
+        item = self.player.current_area.remove_item(item_name)
+        if item:
+            self.player.add_item(item)
             self.update_turn()
-            return message
-        
-        # Areas command - list all available areas
-        if action == "areas":
-            area_list = ", ".join(sorted(self.areas.keys()))
-            return f"Available areas for teleportation: {area_list}"
-            
-        # NPC info command - show information about NPCs in the current area
-        if action == "npcs":
-            if not self.player.current_area.npcs:
-                return "There are no NPCs in this area."
-                
-            npc_info = []
-            for npc in self.player.current_area.npcs:
-                info = f"{npc.name}: {npc.description}"
-                
-                # Add inventory information if NPC has items
-                if hasattr(npc, 'items') and npc.items:
-                    items = ", ".join(str(item) for item in npc.items)
-                    info += f"\n  Inventory: {items}"
-                    
-                # Add health information if NPC has health
-                if hasattr(npc, 'health'):
-                    info += f"\n  Health: {npc.health}/100"
-                    
-                npc_info.append(info)
-                
-            return "NPCs in this area:\n" + "\n\n".join(npc_info)
-            
-        # Teleport command
-        if action == "teleport" and len(parts) > 1:
-            area_name = " ".join(parts[1:])
-            # Find the area by name (case-insensitive)
-            target_area = next((area for name, area in self.areas.items() 
-                               if name.lower() == area_name.lower()), None)
-            
-            if not target_area:
-                # Try partial matching if exact match fails
-                target_area = next((area for name, area in self.areas.items() 
-                                   if area_name.lower() in name.lower()), None)
-                
-            if not target_area:
-                return f"No area named '{area_name}' found. Available areas: {', '.join(sorted(self.areas.keys()))}"
-            
-            # Teleport the player
-            self.player.current_area = target_area
+            return f"You take the {item.name}."
+        return f"There is no {item_name} here."
+
+    def cmd_drop(self, args):
+        """Drop an item from your inventory."""
+        if not args:
+            return "Drop what? Specify an item."
+        item_name = " ".join(args)
+        item = self.player.remove_item(item_name)
+        if item:
+            self.player.current_area.add_item(item)
             self.update_turn()
-            return f"You teleport to {target_area.name}.\n\n{target_area.get_full_description()}"
+            return f"You drop the {item.name}."
+        return f"You don't have a {item_name}."
+
+    def cmd_use(self, args):
+        """Use an item from your inventory."""
+        if not args:
+            return "Use what? Specify an item."
+        item_name = " ".join(args)
+        result = self.player.use_item(item_name, self)
+        if result[0]:
+            self.update_turn()
+            return result[1]
+        return result[1]
+
+    def cmd_interact(self, args):
+        """Interact with an object in the area."""
+        if not args:
+            return "Interact with what? Specify an object."
+        object_name = " ".join(args)
+        obj = next((o for o in self.player.current_area.objects if o.name.lower() == object_name.lower()), None)
+        if not obj:
+            return f"There is no {object_name} here."
         
-        # Break command for breakable objects
-        if action == "break" and len(parts) > 1:
-            # Get the object name and method (if provided)
-            if len(parts) > 2 and parts[1] == "with":
-                # Format: break with [weapon] [object]
-                weapon_name = parts[2]
-                object_name = " ".join(parts[3:])
+        # Handle different object types
+        if isinstance(obj, SoilPlot):
+            plants = ", ".join(str(plant) for plant in obj.plants) if obj.plants else "none"
+            return f"Soil Plot: {plants}"
+        elif isinstance(obj, Computer):
+            return f"Computer: {obj.description}"
+        
+        return f"You interact with the {obj.name}."
+
+    def cmd_areas(self, args):
+        """List all available areas."""
+        area_list = ", ".join(sorted(self.areas.keys()))
+        return f"Available areas: {area_list}"
+
+    def cmd_npcs(self, args):
+        """Show information about NPCs in the current area."""
+        if not self.player.current_area.npcs:
+            return "There are no NPCs in this area."
+            
+        npc_info = []
+        for npc in self.player.current_area.npcs:
+            info = f"{npc.name}: {npc.description}"
+            
+            # Add inventory information if NPC has items
+            if hasattr(npc, 'items') and npc.items:
+                items = ", ".join(str(item) for item in npc.items)
+                info += f"\n  Inventory: {items}"
                 
-                # Check if player has the weapon
-                weapon = next((i for i in self.player.inventory if i.name.lower() == weapon_name.lower() and hasattr(i, 'damage')), None)
-                if not weapon:
-                    return f"You don't have a {weapon_name} to break things with."
+            # Add health information if NPC has health
+            if hasattr(npc, 'health'):
+                info += f"\n  Health: {npc.health}/100"
                 
-                method = "smash"  # Default method
-            else:
-                # Format: break [object]
-                object_name = " ".join(parts[1:])
-                weapon = None
-                method = "smash"
+            npc_info.append(info)
             
-            # Find the breakable object
-            breakable_obj = next((obj for obj in self.player.current_area.objects 
-                                if obj.name.lower() == object_name.lower() and 
-                                hasattr(obj, 'break_glass')), None)
-            
-            if not breakable_obj:
-                return f"There is no breakable {object_name} here."
-            
-            # Break the object
-            if hasattr(breakable_obj, 'break_glass'):
-                if isinstance(breakable_obj, VendingMachine):
-                    result = breakable_obj.break_glass(self.player, method)
-                    if result[0]:
-                        # Add spilled items to the area
-                        for item in result[2]:
-                            self.player.current_area.add_item(item)
-                        # Clear the vending machine's items
-                        breakable_obj.items.clear()
-                        self.update_turn()
-                        return result[1]
-                    return result[1]
-                else:
-                    result = breakable_obj.break_glass(self.player, method)
-                    if result[0]:
-                        self.update_turn()
-                        return result[1]
-                    return result[1]
-            
-            return f"You can't break the {object_name}."
-            
-        # Computer-specific commands
-        if action == "hack":
-            computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)
-            if not computer:
-                return "There's no computer here to hack."
-            
-            result = computer.hack(self.player)
-            if result[0]:
-                self.update_turn()
+        return "NPCs in this area:\n" + "\n\n".join(npc_info)
+
+    def cmd_plant(self, args):
+        """Plant a seed in soil."""
+        if not args:
+            return "Plant what? Specify a seed."
+        seed_name = " ".join(args)
+        seed = next((i for i in self.player.inventory if i.name.lower() == seed_name.lower() and isinstance(i, Seed)), None)
+        if not seed:
+            return f"You don't have a {seed_name}."
+        
+        soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
+        if not soil:
+            return "There's no soil here to plant seeds."
+        
+        plant = Plant(
+            f"{seed.crop_type} plant", 
+            f"A young {seed.crop_type} plant.", 
+            seed.crop_type, 
+            seed.value * 2
+        )
+        
+        result = soil.add_plant(plant)
+        if result[0]:
+            self.player.inventory.remove(seed)
+            self.update_turn()
+        return result[1]
+
+    def cmd_water(self, args):
+        """Water plants in soil."""
+        soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
+        if not soil:
+            return "There are no plants here to water."
+        
+        # Check if the player has a watering can
+        watering_can = next((item for item in self.player.inventory if isinstance(item, WateringCan)), None)
+        if not watering_can:
+            return "You need a watering can to water plants."
+        
+        # Use the watering can to water the plants
+        result = soil.water_plants(watering_can=watering_can)
+        if result[0]:
+            self.update_turn()
+        return result[1]
+
+    def cmd_harvest(self, args):
+        """Harvest a fully grown plant."""
+        if not args:
+            return "Harvest what? Specify a plant."
+        plant_name = " ".join(args)
+        soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
+        if not soil:
+            return "There are no plants here to harvest."
+        
+        result = soil.harvest_plant(plant_name)
+        if not result[0]:
             return result[1]
         
-        if action == "run" and len(parts) > 1:
-            program_name = " ".join(parts[1:])
-            computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)
-            if not computer:
-                return "There's no computer here to run programs on."
-            
-            result = computer.run_program(program_name, self.player, self)
-            if result[0]:
-                self.update_turn()
-            return result[1]
+        message, harvested_item = result[1]
+        self.player.add_item(harvested_item)
+        self.update_turn()
+        return message
+
+    def cmd_hide(self, args):
+        """Hide in a hiding spot to avoid detection."""
+        if not args:
+            return "Hide where? Specify a hiding spot."
+        # Check if player is already hidden
+        if self.player.hidden:
+            return "You are already hiding."
         
-        # Hide command
-        if action == "hide" and len(parts) > 1:
-            # Check if player is already hidden
-            if self.player.hidden:
-                return "You are already hiding."
-            
-            # Find the hiding spot by name
-            hiding_spot_name = " ".join(parts[1:])
+        # Find the hiding spot by name
+        hiding_spot_name = " ".join(args)
+        hiding_spot = next((obj for obj in self.player.current_area.objects 
+                          if isinstance(obj, HidingSpot) and obj.name.lower() == hiding_spot_name.lower()), None)
+        
+        if not hiding_spot:
+            # Try partial matching
             hiding_spot = next((obj for obj in self.player.current_area.objects 
-                              if isinstance(obj, HidingSpot) and obj.name.lower() == hiding_spot_name.lower()), None)
-            
-            if not hiding_spot:
-                # Try partial matching
-                hiding_spot = next((obj for obj in self.player.current_area.objects 
-                                  if isinstance(obj, HidingSpot) and hiding_spot_name.lower() in obj.name.lower()), None)
-            
-            if not hiding_spot:
-                # List available hiding spots
-                hiding_spots = [obj.name for obj in self.player.current_area.objects if isinstance(obj, HidingSpot)]
-                if hiding_spots:
-                    return f"There is no '{hiding_spot_name}' to hide in. Available hiding spots: {', '.join(hiding_spots)}"
-                else:
-                    return "There are no hiding spots in this area."
-            
-            # Try to hide
-            result = hiding_spot.hide(self.player)
-            if result[0]:
-                self.update_turn()
-            return result[1]
+                              if isinstance(obj, HidingSpot) and hiding_spot_name.lower() in obj.name.lower()), None)
         
-        # Unhide command
-        if action == "unhide" or action == "emerge":
-            if not self.player.hidden:
-                return "You are not currently hiding."
-            
-            result = self.player.hiding_spot.leave(self.player)
-            if result[0]:
-                self.update_turn()
-            return result[1]
-            
-        # List hiding spots command
-        if action == "hiding_spots" or action == "hidingspots":
+        if not hiding_spot:
+            # List available hiding spots
             hiding_spots = [obj.name for obj in self.player.current_area.objects if isinstance(obj, HidingSpot)]
             if hiding_spots:
-                return f"Available hiding spots in this area: {', '.join(hiding_spots)}"
+                return f"There is no '{hiding_spot_name}' to hide in. Available hiding spots: {', '.join(hiding_spots)}"
             else:
                 return "There are no hiding spots in this area."
         
-        # Help command
-        if action == "help":
-            return """Available commands:
-- [direction] (north, south, east, west): Move in that direction
-- teleport [area]: Instantly teleport to any area by name
-- areas: List all available areas for teleportation
-- npcs: Show information about NPCs in the current area
-- look: Look around the current area
-- inventory/inv: Check your inventory
-- take [item]: Take an item from the area
-- drop [item]: Drop an item from your inventory
-- use [item]: Use an item from your inventory
-- interact [object]: Interact with an object in the area
-- plant [seed]: Plant a seed in soil
-- water: Water plants in soil
-- harvest [plant]: Harvest a fully grown plant
-- hack: Hack a computer
-- run [program]: Run a program on a hacked computer
-- hide [spot]: Hide in a hiding spot to avoid detection
-- unhide/emerge: Come out of hiding
-- hiding_spots: List all available hiding spots in the area
-- help: Show this help message
-- quit: Exit the game"""
+        # Try to hide
+        result = hiding_spot.hide(self.player)
+        if result[0]:
+            self.update_turn()
+        return result[1]
+
+    def cmd_unhide(self, args):
+        """Come out of hiding."""
+        if not self.player.hidden:
+            return "You are not currently hiding."
         
-        # Quit command
-        if action == "quit":
-            self.running = False
-            return "Thanks for playing!"
+        result = self.player.hiding_spot.leave(self.player)
+        if result[0]:
+            self.update_turn()
+        return result[1]
+
+    def cmd_hiding_spots(self, args):
+        """List all available hiding spots in the area."""
+        hiding_spots = [obj.name for obj in self.player.current_area.objects if isinstance(obj, HidingSpot)]
+        if hiding_spots:
+            return f"Available hiding spots in this area: {', '.join(hiding_spots)}"
+        else:
+            return "There are no hiding spots in this area."
+
+    def cmd_hack(self, args):
+        """Hack a computer."""
+        computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)
+        if not computer:
+            return "There's no computer here to hack."
         
-        return "Unknown command. Type 'help' for a list of commands."
-    
+        result = computer.hack(self.player)
+        if result[0]:
+            self.update_turn()
+        return result[1]
+
+    def cmd_run_program(self, args):
+        """Run a program on a hacked computer."""
+        if not args:
+            return "Run what? Specify a program."
+        program_name = " ".join(args)
+        computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)
+        if not computer:
+            return "There's no computer here to run programs on."
+        
+        result = computer.run_program(program_name, self.player, self)
+        if result[0]:
+            self.update_turn()
+        return result[1]
+
+    def cmd_teleport(self, args):
+        """Teleport to any area. Usage: teleport [area name]"""
+        if not args:
+            return "Teleport where? Specify an area name."
+        area_name = " ".join(args).lower()
+        
+        # Search for area ignoring case
+        for area in self.areas.values():
+            if area.name.lower() == area_name:
+                # If player is hidden, they need to unhide first
+                if self.player.hidden:
+                    hiding_spot = self.player.hiding_spot
+                    result = hiding_spot.leave(self.player)
+                    self.update_turn()
+                    return f"{result[1]}\nYou teleport to {area.name}.\n\n{area.get_full_description()}"
+                
+                self.player.current_area = area
+                self.update_turn()
+                return f"You teleport to {area.name}.\n\n{area.get_full_description()}"
+        
+        return f"No such area: {' '.join(args)}"
+
+    def cmd_help(self, args):
+        """Show help information grouped by command category."""
+        help_text = ["Available commands:"]
+        
+        # Group commands by category
+        categories = {}
+        for cmd, info in self.commands.items():
+            cat = info['category']
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(cmd)
+        
+        # Display commands by category
+        for category in sorted(categories.keys()):
+            help_text.append(f"\n{category.capitalize()} commands:")
+            cmd_list = sorted(categories[category])
+            help_text.append("  " + ", ".join(cmd_list))
+        
+        return "\n".join(help_text)
+
+    def cmd_quit(self, args):
+        """Exit the game."""
+        self.running = False
+        return "Thanks for playing!"
+        
+    def cmd_break(self, args):
+        """Break or smash objects. Usage: break [object] with [weapon] or break [object]"""
+        if not args:
+            return "Break what? Specify an object."
+            
+        # Parse arguments
+        if "with" in args:
+            # Format: break [object] with [weapon]
+            with_index = args.index("with")
+            object_name = " ".join(args[:with_index])
+            weapon_name = " ".join(args[with_index+1:])
+            
+            # Find weapon in inventory
+            weapon = next((i for i in self.player.inventory if i.name.lower() == weapon_name.lower() and hasattr(i, 'damage')), None)
+            if not weapon:
+                return f"You don't have a {weapon_name} to break things with."
+            
+            method = "shoot" if weapon.name.lower() == "gun" else "smash"
+        else:
+            # Format: break [object]
+            object_name = " ".join(args)
+            weapon = None
+            method = "smash"
+        
+        # Find the breakable object
+        breakable_obj = next((obj for obj in self.player.current_area.objects 
+                            if obj.name.lower() == object_name.lower() and 
+                            hasattr(obj, 'break_glass')), None)
+        
+        if not breakable_obj:
+            return f"There is no breakable {object_name} here."
+        
+        # Break the object
+        if hasattr(breakable_obj, 'break_glass'):
+            result = breakable_obj.break_glass(self.player, method)
+            if result[0]:
+                self.update_turn()
+                # If items were spilled, add them to the area
+                if len(result) > 2 and result[2]:
+                    for item in result[2]:
+                        self.player.current_area.add_item(item)
+                    breakable_obj.items.clear()
+            return result[1]
+        
+        return f"You can't break the {object_name}."
+
     def update_turn(self):
         """Update the game state for a new turn."""
         self.current_turn += 1

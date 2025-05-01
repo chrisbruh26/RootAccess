@@ -3,7 +3,7 @@ import os
 import json
 
 # Import game modules
-from items import Item, Weapon, Consumable
+from items import Item, Weapon, Consumable, EffectItem
 from objects import VendingMachine
 from gardening import Seed, Plant, SoilPlot, WateringCan
 from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
@@ -107,13 +107,13 @@ class Game:
         # create better weapons
 
         # Hacked Milk Blaster - causes hallucinations
-        hacked_milk_blaster = Weapon("Hacked Milk Blaster", "A strange weapon that shoots hacked milk.", 50, 20)
+        hacked_milk_blaster = EffectItem("Hacked Milk Blaster", "A strange weapon that shoots hacked milk.", 50, 20)
         hacked_milk_blaster.add_effect(HallucinationEffect())
         hacked_milk_blaster.effects_only = True  # This weapon only applies effects
         self.areas["warehouse"].add_item(hacked_milk_blaster)
         
         # Confusion Ray - causes confusion
-        confusion_ray = Weapon("Confusion Ray", "A device that emits waves that confuse the target.", 60, 15)
+        confusion_ray = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, 15)
         confusion_ray.add_effect(ConfusionEffect())
         confusion_ray.effects_only = True  # This weapon only applies effects
         self.areas["alley"].add_item(confusion_ray)
@@ -591,9 +591,17 @@ class Game:
             
             # Check if player is dead
             if self.player.health <= 0:
-                print("You have been defeated! Game over.")
-                self.running = False
-
+                # respawn
+                print("\n\n="*50)
+                print("YOU HAVE DIED")
+                print("="*50)
+                print("\n\nrespawning...")
+                self.player.current_area = self.areas["Home"]
+                self.player.health = self.player.max_health
+                self.player.detected_by.clear()
+                self.player.hidden = False
+                self.player.hiding_spot = None
+                print(self.player.current_area.get_full_description())
 
 # ----------------------------- #
 # MAIN ENTRY POINT              #

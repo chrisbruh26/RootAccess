@@ -109,13 +109,11 @@ class Game:
         # Hacked Milk Blaster - causes hallucinations
         hacked_milk_blaster = EffectItem("Hacked Milk Blaster", "A strange weapon that shoots hacked milk.", 50, 20)
         hacked_milk_blaster.add_effect(HallucinationEffect())
-        hacked_milk_blaster.effects_only = True  # This weapon only applies effects
         self.areas["warehouse"].add_item(hacked_milk_blaster)
         
         # Confusion Ray - causes confusion
         confusion_ray = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, 15)
         confusion_ray.add_effect(ConfusionEffect())
-        confusion_ray.effects_only = True  # This weapon only applies effects
         self.areas["alley"].add_item(confusion_ray)
         self.areas["Home"].add_item(hacked_milk_blaster)
 
@@ -176,6 +174,7 @@ class Game:
             self.areas["warehouse"].npcs[-1].add_item(gun)
             self.areas["warehouse"].npcs[-1].add_item(watering_can)
             self.areas["warehouse"].add_item(carrot_seed)
+            self.areas["warehouse"].npcs[-1].add_item(confusion_ray)
 
 
         
@@ -194,7 +193,7 @@ class Game:
         # Set player's starting location
         self.player.current_area = self.areas["Home"]
         
-    def process_command(self, command):
+    def process_command(self, command): # need command dictionary for better organization 
         """Process a player command."""
         command = command.lower().strip()
         parts = command.split()

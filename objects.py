@@ -103,8 +103,10 @@ class HidingSpot:
         return True, f"You emerge from the {self.name}."
     
     def __str__(self):
-        status = "occupied" if self.is_occupied else "empty"
-        return f"{self.name} ({status})"
+        if self.is_occupied:
+            return f"{self.name} (occupied)"
+        else:
+            return f"{self.name}"
     
 
 class Storage:
@@ -181,8 +183,10 @@ class BreakableGlassObject:
         return True, message
     
     def __str__(self):
-        status = "broken" if self.is_broken else "intact"
-        return f"{self.name} ({status})"
+        if self.is_broken:
+            return f"{self.name} (broken)"
+        else:
+            return f"{self.name}"
 
 
 class VendingMachine(BreakableGlassObject):
@@ -234,6 +238,7 @@ class VendingMachine(BreakableGlassObject):
         """Add an item to the vending machine."""
         self.items.append(item)
         
-    def __str__(self):
+    '''def __str__(self): # commenting out for now in case I need it 
         status = "broken" if self.is_broken else "intact"
         return f"{self.display_name} ({status})"
+'''

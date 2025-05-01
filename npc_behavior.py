@@ -1,3 +1,4 @@
+
 import random
 import json
 import os
@@ -275,11 +276,11 @@ class BehaviorSettings:
         
         # Behavior cooldowns (in turns)
         self.cooldowns = {
-            BehaviorType.IDLE: 3,      # 1 turn between idle behaviors
+            BehaviorType.IDLE: 1,      # 1 turn between idle behaviors
             BehaviorType.TALK: 2,      # 2 turns between talking
             BehaviorType.FIGHT: 3,     # 3 turns between fighting
-            BehaviorType.USE_ITEM: 0,  # 1 turn between using items
-            BehaviorType.GARDENING: 0, # 2 turns between gardening activities
+            BehaviorType.USE_ITEM: 1,  # 1 turn between using items
+            BehaviorType.GARDENING: 2, # 2 turns between gardening activities
             BehaviorType.GIFT: 5,      # 5 turns between gifting
         }
         
@@ -518,16 +519,6 @@ class NPCBehaviorCoordinator:
                     npc.health = min(100, npc.health + item.health_restore)
                 npc.items.remove(item)
                 return f"{npc.name} consumes {item.name}."
-
-            # If it's an effect item, use it
-            if hasattr(item, 'use'):
-                result = item.use(npc, game)
-                if result[0]:  # If successfully used
-                    npc.items.remove(item)
-                    base_message = f"{npc.name} uses {item.name}"
-                    if len(result) > 1 and result[1]:  # If there's an additional message
-                        base_message += f" - {result[1]}"
-                    return base_message
                 
             # Generic item use
             return f"{npc.name} uses {item.name}."

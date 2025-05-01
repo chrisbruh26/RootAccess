@@ -109,11 +109,13 @@ class Game:
         # Hacked Milk Blaster - causes hallucinations
         hacked_milk_blaster = Weapon("Hacked Milk Blaster", "A strange weapon that shoots hacked milk.", 50, 20)
         hacked_milk_blaster.add_effect(HallucinationEffect())
+        hacked_milk_blaster.effects_only = True  # This weapon only applies effects
         self.areas["warehouse"].add_item(hacked_milk_blaster)
         
         # Confusion Ray - causes confusion
         confusion_ray = Weapon("Confusion Ray", "A device that emits waves that confuse the target.", 60, 15)
         confusion_ray.add_effect(ConfusionEffect())
+        confusion_ray.effects_only = True  # This weapon only applies effects
         self.areas["alley"].add_item(confusion_ray)
         self.areas["Home"].add_item(hacked_milk_blaster)
 

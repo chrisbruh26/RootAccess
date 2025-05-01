@@ -1,10 +1,10 @@
-
 import random
 import os
 import json
 
 # Import game modules
 from items import Item, Weapon, Consumable
+from objects import VendingMachine
 from gardening import Seed, Plant, SoilPlot
 from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
 from npc_behavior import NPC, Civilian, Gang, GangMember, BehaviorType, BehaviorSettings, NPCBehaviorCoordinator, behavior_settings
@@ -91,6 +91,17 @@ class Game:
         self.areas["garden"].add_item(Seed("Potato Seed", "A seed for growing potatoes.", "potato", 5))
         self.areas["street"].add_item(Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20))
         self.areas["alley"].add_item(Weapon("Pipe", "A metal pipe that can be used as a weapon.", 15, 10))
+
+
+        vending_machine = VendingMachine("Vending Machine")
+
+        self.areas["warehouse"].add_object(vending_machine)
+
+        vending_machine.add_item(Consumable("Soda", "A refreshing soda.", 5, 10))
+        vending_machine.add_item(Consumable("Chips", "A bag of chips.", 5, 5))
+        vending_machine.add_item(Consumable("Candy Bar", "A chocolate candy bar.", 5, 15))
+        vending_machine.add_item(Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20))
+
         
         # create better weapons
 
@@ -131,10 +142,14 @@ class Game:
 
         # add 5 NPCs from the bloodhounds_name list to the warehouse
 
+        gun = Weapon("Gun", "A standard firearm.", 50, 20)
+
         for i in range(5):
             name = random.choice(bloodhounds_names)
             bloodhounds_names.remove(name)
             self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Bloodhounds named {name}.", self.gangs["Bloodhounds"]))
+            # add a gun to inventory of each gang member
+            self.areas["warehouse"].npcs[-1].add_item(gun)
             self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
 
         
@@ -329,6 +344,56 @@ class Game:
             self.update_turn()
             return f"You teleport to {target_area.name}.\n\n{target_area.get_full_description()}"
         
+        # Break command for breakable objects
+        if action == "break" and len(parts) > 1:
+            # Get the object name and method (if provided)
+            if len(parts) > 2 and parts[1] == "with":
+                # Format: break with [weapon] [object]
+                weapon_name = parts[2]
+                object_name = " ".join(parts[3:])
+                
+                # Check if player has the weapon
+                weapon = next((i for i in self.player.inventory if i.name.lower() == weapon_name.lower() and hasattr(i, 'damage')), None)
+                if not weapon:
+                    return f"You don't have a {weapon_name} to break things with."
+                
+                method = "smash"  # Default method
+            else:
+                # Format: break [object]
+                object_name = " ".join(parts[1:])
+                weapon = None
+                method = "smash"
+            
+            # Find the breakable object
+            breakable_obj = next((obj for obj in self.player.current_area.objects 
+                                if obj.name.lower() == object_name.lower() and 
+                                hasattr(obj, 'break_glass')), None)
+            
+            if not breakable_obj:
+                return f"There is no breakable {object_name} here."
+            
+            # Break the object
+            if hasattr(breakable_obj, 'break_glass'):
+                if isinstance(breakable_obj, VendingMachine):
+                    result = breakable_obj.break_glass(self.player, method)
+                    if result[0]:
+                        # Add spilled items to the area
+                        for item in result[2]:
+                            self.player.current_area.add_item(item)
+                        # Clear the vending machine's items
+                        breakable_obj.items.clear()
+                        self.update_turn()
+                        return result[1]
+                    return result[1]
+                else:
+                    result = breakable_obj.break_glass(self.player, method)
+                    if result[0]:
+                        self.update_turn()
+                        return result[1]
+                    return result[1]
+            
+            return f"You can't break the {object_name}."
+            
         # Computer-specific commands
         if action == "hack":
             computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)

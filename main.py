@@ -97,6 +97,7 @@ class Game:
 
         self.areas["warehouse"].add_object(vending_machine)
 
+
         vending_machine.add_item(Consumable("Soda", "A refreshing soda.", 5, 10))
         vending_machine.add_item(Consumable("Chips", "A bag of chips.", 5, 5))
         vending_machine.add_item(Consumable("Candy Bar", "A chocolate candy bar.", 5, 15))
@@ -107,15 +108,17 @@ class Game:
         # create better weapons
 
         # Hacked Milk Blaster - causes hallucinations
-        hacked_milk_blaster = EffectItem("Hacked Milk Blaster", "A strange weapon that shoots hacked milk.", 50, 20)
-        hacked_milk_blaster.add_effect(HallucinationEffect())
+        hacked_milk_blaster = EffectItem("Hacked Milk Blaster", "A strange device that sprays hacked milk.", 50, HallucinationEffect())
         self.areas["warehouse"].add_item(hacked_milk_blaster)
         
         # Confusion Ray - causes confusion
-        confusion_ray = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, 15)
-        confusion_ray.add_effect(ConfusionEffect())
+        confusion_ray = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, ConfusionEffect())
         self.areas["alley"].add_item(confusion_ray)
         self.areas["Home"].add_item(hacked_milk_blaster)
+
+
+        # WHEN ADDING EFFECTS TO ITEMS LIKE CROPS: example_crop.add_effect(ExampleEffect())
+
 
 
 
@@ -173,8 +176,12 @@ class Game:
             # add a gun to inventory of each gang member
             self.areas["warehouse"].npcs[-1].add_item(gun)
             self.areas["warehouse"].npcs[-1].add_item(watering_can)
-            self.areas["warehouse"].add_item(carrot_seed)
             self.areas["warehouse"].npcs[-1].add_item(confusion_ray)
+            self.areas["warehouse"].add_item(carrot_seed)
+
+
+
+            self.player.add_item(gun)
 
 
         
@@ -193,7 +200,7 @@ class Game:
         # Set player's starting location
         self.player.current_area = self.areas["Home"]
         
-    def process_command(self, command): # need command dictionary for better organization 
+    def process_command(self, command):
         """Process a player command."""
         command = command.lower().strip()
         parts = command.split()
@@ -590,17 +597,9 @@ class Game:
             
             # Check if player is dead
             if self.player.health <= 0:
-                # respawn
-                print("\n\n="*50)
-                print("YOU HAVE DIED")
-                print("="*50)
-                print("\n\nrespawning...")
-                self.player.current_area = self.areas["Home"]
-                self.player.health = self.player.max_health
-                self.player.detected_by.clear()
-                self.player.hidden = False
-                self.player.hiding_spot = None
-                print(self.player.current_area.get_full_description())
+                print("You have been defeated! Game over.")
+                self.running = False
+
 
 # ----------------------------- #
 # MAIN ENTRY POINT              #

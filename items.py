@@ -60,10 +60,6 @@ class EffectItem(Item):
 
     def __str__(self):
         return f"{self.name} ({self.effect.name} effect)"
-    
-    def add_effect(self, effect):
-        """Add an effect to the item."""
-        self.effect = effect
 
     def use(self, player, game):
         """Use the effect item, applying its effect to NPCs in the current area."""

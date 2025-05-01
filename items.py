@@ -19,78 +19,78 @@ class Weapon(Item):
     def __init__(self, name, description, value, damage):
         super().__init__(name, description, value)
         self.damage = damage
-        self.effects = []  # List of effects this weapon can apply
-        self.effects_only = False  # Set to True for weapons that only apply effects
 
     def __str__(self):
         return f"{self.name} (Damage: {self.damage})"
         
-    def add_effect(self, effect):
-        """Add an effect to this weapon."""
-        self.effects.append(effect)
-        
     def use(self, player, game):
-        """Use the weapon, applying its effects to NPCs in the current area."""
+        """Use the weapon, only handling damage and breaking objects."""
+        messages = []
+        messages.append(f"You use the {self.name}!")
+        
+        # Check for breakable objects in the area
+        if player.current_area and player.current_area.objects:
+            # Find a breakable object that's not already broken
+            from objects import VendingMachine
+            breakable_objects = [obj for obj in player.current_area.objects 
+                                if hasattr(obj, 'break_glass') and not obj.is_broken]
+            
+            if breakable_objects and random.random() < 0.3:  # 30% chance to break something
+                obj = random.choice(breakable_objects)
+                method = "shoot" if "gun" in self.name.lower() else "smash"
+                
+                if isinstance(obj, VendingMachine):
+                    result = obj.break_glass(player, method)
+                    if result[0]:
+                        for item in result[2]:
+                            player.current_area.add_item(item)
+                        obj.items.clear()
+                        messages.append(result[1])
+                else:
+                    result = obj.break_glass(player, method)
+                    if result[0]:
+                        messages.append(result[1])
+        
+        return True, "\n".join(messages)
+    
+class EffectItem(Item):
+    def __init__(self, name, description, value, effect):
+        super().__init__(name, description, value)
+        self.effect = effect
+
+    def __str__(self):
+        return f"{self.name} ({self.effect.name} effect)"
+    
+    def add_effect(self, effect):
+        """Add an effect to the item."""
+        self.effect = effect
+
+    def use(self, player, game):
+        """Use the effect item, applying its effect to NPCs in the current area."""
         messages = []
         affected_npcs = []
         
-        # Basic attack message
         messages.append(f"You use the {self.name}!")
         
-        # Apply effects to NPCs in the current area
-        if self.effects and player.current_area and player.current_area.npcs:
-            for effect in self.effects:
-                # Create a copy of the effect for each NPC
-                for npc in player.current_area.npcs:
-                    # Skip dead NPCs
-                    if hasattr(npc, 'is_alive') and not npc.is_alive:
-                        continue
-                        
-                    # Apply the effect to the NPC
-                    if hasattr(npc, 'active_effects'):
-                        # Create a new instance of the effect for this NPC
-                        effect_copy = type(effect)()
-                        npc.active_effects.append(effect_copy)
-                        affected_npcs.append(npc)
-
-                # Add the effect messages to the NPC coordinator
-                if game and game.npc_coordinator:
-                    game.npc_coordinator.add_effect_messages(affected_npcs, effect)
-
-        # Only check for breakable objects if this isn't an effects-only weapon
-        if not self.effects_only:
-            # Check for breakable objects in the area
-            if player.current_area and player.current_area.objects:
-                # Find a breakable object that's not already broken
-                from objects import VendingMachine
-                breakable_objects = [obj for obj in player.current_area.objects 
-                                    if hasattr(obj, 'break_glass') and not obj.is_broken]
-                
-                if breakable_objects and random.random() < 0.3:  # 30% chance to break something
-                    # Choose a random breakable object
-                    obj = random.choice(breakable_objects)
+        # Apply effect to NPCs in the current area
+        if player.current_area and player.current_area.npcs:
+            for npc in player.current_area.npcs:
+                # Skip dead NPCs
+                if hasattr(npc, 'is_alive') and not npc.is_alive:
+                    continue
                     
-                    # Determine the method based on weapon type
-                    method = "shoot" if "gun" in self.name.lower() else "smash"
-                    
-                    # Break the object
-                    if isinstance(obj, VendingMachine):
-                        result = obj.break_glass(player, method)
-                        if result[0]:
-                            # Add spilled items to the area
-                            for item in result[2]:
-                                player.current_area.add_item(item)
-                            # Clear the vending machine's items
-                            obj.items.clear()
-                            messages.append(result[1])
-                    else:
-                        result = obj.break_glass(player, method)
-                        if result[0]:
-                            messages.append(result[1])
+                # Apply the effect to the NPC
+                if hasattr(npc, 'active_effects'):
+                    # Create a new instance of the effect for this NPC
+                    effect_copy = type(self.effect)()
+                    npc.active_effects.append(effect_copy)
+                    affected_npcs.append(npc)
+
+            # Add the effect messages to the NPC coordinator
+            if game and game.npc_coordinator:
+                game.npc_coordinator.add_effect_messages(affected_npcs, self.effect)
         
-        # Return only the weapon use message, let the coordinator handle effect messages
         return True, messages[0]
-
 
 class Consumable(Item):
     def __init__(self, name, description, value, health_restore):

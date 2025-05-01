@@ -2,6 +2,7 @@ import random
 import json
 import os
 from effects import Effect, HallucinationEffect, ConfusionEffect
+from objects import VendingMachine
 
 # ----------------------------- #
 # NPC BEHAVIOR SYSTEM           #
@@ -563,6 +564,33 @@ class NPCBehaviorCoordinator:
         # Chance to interact with environment
         if hasattr(npc.location, 'objects') and npc.location.objects and random.random() < 0.3:
             obj = random.choice(npc.location.objects)
+            
+            # Handle breakable objects
+            if hasattr(obj, 'break_glass') and not obj.is_broken and random.random() < 0.2:
+                # NPC has a chance to break glass objects if they're aggressive
+                if isinstance(npc, GangMember) and random.random() < 0.4:
+                    # Check if NPC has a weapon
+                    weapon = next((item for item in npc.items if hasattr(item, 'damage')), None)
+                    
+                    if weapon:
+                        method = "shoot" if weapon.name.lower() == "gun" else "smash"
+                        
+                        # Break the object
+                        if isinstance(obj, VendingMachine):
+                            result = obj.break_glass(npc, method)
+                            if result[0]:
+                                # Add spilled items to the area
+                                for item in result[2]:
+                                    npc.location.add_item(item)
+                                # Clear the vending machine's items
+                                obj.items.clear()
+                                return result[1]
+                        else:
+                            result = obj.break_glass(npc, method)
+                            if result[0]:
+                                return result[1]
+            
+            # Handle other object types
             if hasattr(obj, 'plants') and obj.plants:
                 return f"{npc.name} examines the plants in the {obj.name}."
             elif hasattr(obj, 'is_hacked'):

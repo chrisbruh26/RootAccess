@@ -1,13 +1,20 @@
 import random
-from items import Item
 
 # ----------------------------- #
 # GARDENING SYSTEM              #
 # ----------------------------- #
 
-class Seed(Item):
+class Seed:
     def __init__(self, name, description, crop_type, value, growth_time=3):
-        super().__init__(name, description, value)
+        # Import here to avoid circular imports
+        from items import Item
+        
+        # Initialize as an Item
+        self.name = name
+        self.description = description
+        self.value = value
+        
+        # Seed-specific properties
         self.crop_type = crop_type
         self.growth_time = growth_time  # Number of turns until fully grown
     
@@ -15,9 +22,14 @@ class Seed(Item):
         return f"{self.name} ({self.crop_type})"
 
 
-class Plant(Item):
+class Plant:
     def __init__(self, name, description, crop_type, value, growth_stage=0, max_growth=3):
-        super().__init__(name, description, value)
+        # Initialize basic properties
+        self.name = name
+        self.description = description
+        self.value = value
+        
+        # Plant-specific properties
         self.crop_type = crop_type
         self.growth_stage = growth_stage
         self.max_growth = max_growth
@@ -68,6 +80,9 @@ class Plant(Item):
     
     def get_harvested_item(self):
         """Create a harvested item based on this plant, transferring any effects."""
+        # Import here to avoid circular imports
+        from items import Item
+        
         harvested_item = Item(
             f"{self.crop_type.capitalize()}", 
             f"A freshly harvested {self.crop_type}.", 
@@ -117,15 +132,43 @@ class SoilPlot:
             return plant
         return None
     
-    def water_plants(self, substance=None):
-        """Water all plants in the soil plot."""
+    def water_plants(self, watering_can=None, substance=None, actor_name="You"):
+        """
+        Water all plants in the soil plot.
+        
+        Args:
+            watering_can: The watering can to use (required)
+            substance: Optional substance to add to the water
+            actor_name: Name of the actor doing the watering (for message formatting)
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        # Check if there are plants to water
         if not self.plants:
             return False, "There are no plants to water here."
         
+        # Check if a watering can is provided
+        if not watering_can:
+            return False, f"{actor_name} need a watering can to water plants."
+        
+        # Check if the watering can has water
+        if watering_can.current_water <= 0:
+            return False, f"The {watering_can.name} is empty. It needs to be filled first."
+        
+        # Water the plants
         results = []
         for plant in self.plants:
             result = plant.water(substance)
-            results.append(result[1])
+            
+            # Format the message to use the actor's name
+            if result[0]:  # If watering was successful
+                message = result[1].replace("You water", f"{actor_name} water")
+                results.append(message)
+        
+        # Use water from the watering can
+        water_used = min(len(self.plants), watering_can.current_water)
+        watering_can.current_water -= water_used
         
         return True, "\n".join(results)
     
@@ -152,3 +195,46 @@ class SoilPlot:
         
         plant_count = len(self.plants)
         return f"{self.name} ({plant_count}/{self.max_plants} plants)"
+    
+class WateringCan:
+    def __init__(self, name="Watering Can", description="A can for watering plants.", capacity=10):
+        self.name = name
+        self.description = description
+        self.capacity = capacity
+        self.current_water = capacity  # Start full
+    
+    def fill(self):
+        """Fill the watering can to its maximum capacity."""
+        self.current_water = self.capacity
+        return True, f"You fill the {self.name} to its maximum capacity."
+    
+    def water(self, target, substance=None):
+        """
+        Use the watering can to water a target.
+        
+        Args:
+            target: The target to water (soil plot or plant)
+            substance: Optional substance to add to the water
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        # Check if the watering can has water
+        if self.current_water <= 0:
+            return False, f"The {self.name} is empty. It needs to be filled first."
+        
+        # Handle different target types
+        if hasattr(target, 'water_plants'):
+            # Target is a soil plot
+            return target.water_plants(self, substance)
+        elif hasattr(target, 'water'):
+            # Target is a plant
+            result = target.water(substance)
+            if result[0]:
+                self.current_water -= 1
+            return result
+        else:
+            return False, f"You can't water that with the {self.name}."
+    
+    def __str__(self):
+        return f"{self.name} ({self.current_water}/{self.capacity} water)"

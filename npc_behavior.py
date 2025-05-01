@@ -4,6 +4,7 @@ import json
 import os
 from effects import Effect, HallucinationEffect, ConfusionEffect
 from objects import VendingMachine
+from color_system import colorize, semantic, style
 
 # ----------------------------- #
 # NPC BEHAVIOR SYSTEM           #
@@ -117,10 +118,12 @@ class GangMember(NPC):
             # Get a hallucination message if available
             for effect in self.active_effects:
                 if hasattr(effect, 'get_combat_prevention_message'):
-                    return f"{self.name} {effect.get_combat_prevention_message()} instead of attacking you."
+                    effect_msg = effect.get_combat_prevention_message()
+                    return f"{semantic(self.name, 'gang_member')} {semantic(effect_msg, 'hallucination')} instead of attacking you."
                 elif hasattr(effect, 'get_hallucination_message'):
-                    return f"{self.name} {effect.get_hallucination_message()} instead of attacking you."
-            return f"{self.name} is too distracted to attack you."
+                    hallucination_msg = effect.get_hallucination_message()
+                    return f"{semantic(self.name, 'gang_member')} {semantic(hallucination_msg, 'hallucination')} instead of attacking you."
+            return f"{semantic(self.name, 'gang_member')} is too distracted to attack you."
         
         # Check if this gang has detected the player
         if self.gang not in player.detected_by:
@@ -130,7 +133,10 @@ class GangMember(NPC):
         # Simple combat logic
         damage = random.randint(5, 15)
         player.health -= damage
-        return f"{self.name} attacks you for {damage} damage!"
+        
+        # Format attack message with colors
+        attack_msg = f"{semantic(self.name, 'gang_member')} attacks you for {semantic(str(damage), 'damage')} damage!"
+        return semantic(attack_msg, 'danger')
 
     def attack_npc(self, target_npc):
         # Simple NPC-to-NPC combat
@@ -187,7 +193,8 @@ class GangMember(NPC):
             # Get a hallucination message if available
             for effect in self.active_effects:
                 if hasattr(effect, 'get_hallucination_message'):
-                    return f"{self.name} {effect.get_hallucination_message()}."
+                    hallucination_msg = effect.get_hallucination_message()
+                    return f"{semantic(self.name, 'gang_member')} {semantic(hallucination_msg, 'hallucination')}."
             return None
         
         # If player is hidden, drastically reduce detection chance
@@ -215,7 +222,10 @@ class GangMember(NPC):
                 # Set a cooldown before the NPC can detect again if the player escapes
                 self.detection_cooldown = 3
                 
-                return f"{self.name} discovers your hiding spot and drags you out!"
+                # Format message with colors
+                hiding_spot_name = player.hiding_spot.name if player.hiding_spot else "hiding spot"
+                message = f"{semantic(self.name, 'gang_member')} discovers your {semantic(hiding_spot_name, 'hiding')} and drags you out!"
+                return semantic(message, 'danger')
             
             # Most of the time, hidden players aren't detected
             return None
@@ -230,7 +240,9 @@ class GangMember(NPC):
             # Set a cooldown before the NPC can detect again if the player escapes
             self.detection_cooldown = 3
             
-            return f"{self.name} spots you and becomes hostile!"
+            # Format message with colors
+            message = f"{semantic(self.name, 'gang_member')} spots you and becomes hostile!"
+            return semantic(message, 'danger')
         
         return None
 

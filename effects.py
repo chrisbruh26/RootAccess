@@ -1,5 +1,4 @@
 import random
-from items import Item
 
 # ----------------------------- #
 # EFFECTS SYSTEM                #
@@ -103,6 +102,9 @@ class SupervisionEffect(PlantEffect):
     
     def apply_to_player(self, player, game):
         """Apply supervision effect to player, spawning hidden items in the area."""
+        # Import here to avoid circular imports
+        from items import Item
+        
         # Add the effect to player's active effects
         if not hasattr(player, 'active_effects'):
             player.active_effects = {}

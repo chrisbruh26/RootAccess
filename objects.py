@@ -105,3 +105,135 @@ class HidingSpot:
     def __str__(self):
         status = "occupied" if self.is_occupied else "empty"
         return f"{self.name} ({status})"
+    
+
+class Storage:
+    """A storage container for items."""
+    def __init__(self, name="Storage", description="A storage container."):
+        self.name = name
+        self.description = description
+        self.items = []
+    
+    def add_item(self, item):
+        """Add an item to the storage."""
+        self.items.append(item)
+        return True, f"You add the {item.name} to the {self.name}."
+    
+    def remove_item(self, item_name):
+        """Remove an item from the storage."""
+        item = next((i for i in self.items if i.name.lower() == item_name.lower()), None)
+        if not item:
+            return False, f"There is no {item_name} in the {self.name}."
+        
+        self.items.remove(item)
+        return True, f"You take the {item.name} from the {self.name}."
+    
+    def __str__(self):
+        if not self.items:
+            return f"{self.name} (empty)"
+        
+        item_list = "\n".join(f"- {item}" for item in self.items)
+        return f"{self.name}:\n{item_list}"
+    
+
+class BreakableGlassObject:
+    """Objects that have breakable glass."""
+    def __init__(self, name, description="A breakable object with glass.", broken=False):
+        self.name = name
+        self.description = description
+        self.is_broken = broken
+        
+    def break_glass(self, breaker=None, method=None):
+        """
+        Break the glass of the object.
+        
+        Args:
+            breaker: The entity (player or NPC) breaking the glass
+            method: The method used to break the glass (e.g., "smash", "shoot")
+            
+        Returns:
+            tuple: (success, message)
+        """
+        if self.is_broken:
+            return False, f"The {self.name} is already broken."
+        
+        self.is_broken = True
+        
+        # Generate appropriate message based on who broke it and how
+        if breaker:
+            # Check if breaker is the player
+            from player import Player
+            is_player = isinstance(breaker, Player)
+            
+            if method:
+                if is_player:
+                    message = f"You {method} the {self.name} and it shatters!"
+                else:
+                    message = f"{breaker.name} {method}es the {self.name} and it shatters!"
+            else:
+                if is_player:
+                    message = f"You break the {self.name} and it shatters!"
+                else:
+                    message = f"{breaker.name} breaks the {self.name} and it shatters!"
+        else:
+            message = f"The {self.name} shatters!"
+            
+        return True, message
+    
+    def __str__(self):
+        status = "broken" if self.is_broken else "intact"
+        return f"{self.name} ({status})"
+
+
+class VendingMachine(BreakableGlassObject):
+    """A Vending Machine."""
+    def __init__(self, name="Vending Machine", description="A vending machine filled with snacks and drinks."):
+        super().__init__(name.lower(), description, broken=False)
+        self.display_name = name  # For display purposes
+        self.items = []
+    
+    def break_glass(self, breaker=None, method=None):
+        """
+        Break the glass of the vending machine and spill its contents.
+        
+        Args:
+            breaker: The entity breaking the glass
+            method: The method used to break the glass
+            
+        Returns:
+            tuple: (success, message, spilled_items)
+        """
+        result = super().break_glass(breaker, method)
+        
+        if not result[0]:
+            return False, result[1], []
+            
+        # Create a copy of items to spill
+        spilled_items = self.items.copy()
+        message = result[1]
+        
+        # Check if breaker is the player for appropriate messaging
+        from player import Player
+        is_player = isinstance(breaker, Player)
+        
+        if spilled_items:
+            item_names = ", ".join(item.name for item in spilled_items)
+            if is_player:
+                message += f"\nItems spill out onto the floor: {item_names}"
+            else:
+                message += f"\nItems spill out onto the floor: {item_names}"
+        else:
+            if is_player:
+                message += "\nYou find that the vending machine is empty."
+            else:
+                message += "\nThe vending machine is empty."
+            
+        return True, message, spilled_items
+    
+    def add_item(self, item):
+        """Add an item to the vending machine."""
+        self.items.append(item)
+        
+    def __str__(self):
+        status = "broken" if self.is_broken else "intact"
+        return f"{self.display_name} ({status})"

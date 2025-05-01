@@ -5,7 +5,7 @@ import json
 # Import game modules
 from items import Item, Weapon, Consumable
 from objects import VendingMachine
-from gardening import Seed, Plant, SoilPlot
+from gardening import Seed, Plant, SoilPlot, WateringCan
 from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
 from npc_behavior import NPC, Civilian, Gang, GangMember, BehaviorType, BehaviorSettings, NPCBehaviorCoordinator, behavior_settings
 from objects import Computer, HidingSpot
@@ -102,6 +102,7 @@ class Game:
         vending_machine.add_item(Consumable("Candy Bar", "A chocolate candy bar.", 5, 15))
         vending_machine.add_item(Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20))
 
+
         
         # create better weapons
 
@@ -144,13 +145,36 @@ class Game:
 
         gun = Weapon("Gun", "A standard firearm.", 50, 20)
 
+        watering_can = WateringCan("watering can")
+        self.player.add_item(watering_can)
+        self.areas["Home"].add_item(watering_can)
+
+        carrot_seed =Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5)
+
+
+        # add NPCs to the garden to observe how normal civillians interact with plants
+
+        civilian_names = ["Ben", "Bob", "Charl", "Muckle", "Beevo", "ZeFronk", "Grazey", "Honk", "Ivee", "Jork"]
+
+        name_variations = ["etti", "oodle", "op", "eeky", "-eep", "uffin", "bertmo", "athur", "ubble", "uck", "ington", "sworth", "thistle", "quibble", "fizzle", "whistle", "plume", "tumble", "whisk", "glimmer", "thrax", "gloop", "splunk", "dribble", "crunch", "splorp", "quack", "splat", "grizzle", "blorp", "kins", "muff", "snuff", "puff", "whiff", "bloop", "twizzle", "flibble", "squibble", "wobble", "izzle", "oodle", "bop", "snorp", "florp", "wump", "zorp", "plonk", "squee", "boop", "doodle", "ucklebuck", "shoop"]
+
+        for i in range(5):
+            name_start = random.choice(civilian_names)
+            name_end = random.choice(name_variations)
+            name = f"{name_start}{name_end}"
+            self.areas["garden"].add_npc(Civilian(name, f"A random civilian named {name}."))
+            self.areas["garden"].npcs[-1].add_item(watering_can)
+            self.areas["garden"].npcs[-1].add_item(carrot_seed)
+
         for i in range(5):
             name = random.choice(bloodhounds_names)
             bloodhounds_names.remove(name)
             self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Bloodhounds named {name}.", self.gangs["Bloodhounds"]))
             # add a gun to inventory of each gang member
             self.areas["warehouse"].npcs[-1].add_item(gun)
-            self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
+            self.areas["warehouse"].npcs[-1].add_item(watering_can)
+            self.areas["warehouse"].add_item(carrot_seed)
+
 
         
 
@@ -158,7 +182,6 @@ class Game:
 
         self.areas["warehouse"].add_npc(Civilian("John", "A random guy."))
 
-        self.areas["warehouse"].add_item(Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5))
 
 
 
@@ -277,7 +300,13 @@ class Game:
             if not soil:
                 return "There are no plants here to water."
             
-            result = soil.water_plants()
+            # Check if the player has a watering can
+            watering_can = next((item for item in self.player.inventory if isinstance(item, WateringCan)), None)
+            if not watering_can:
+                return "You need a watering can to water plants."
+            
+            # Use the watering can to water the plants
+            result = soil.water_plants(watering_can=watering_can)
             if result[0]:
                 self.update_turn()
             return result[1]

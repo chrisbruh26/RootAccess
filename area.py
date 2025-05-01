@@ -1,3 +1,5 @@
+from color_system import colorize, semantic, style
+
 class Area:
     def __init__(self, name, description):
         self.name = name
@@ -44,17 +46,41 @@ class Area:
     
     def get_full_description(self):
         """Get a full description of the area, including items, NPCs, and exits."""
-        desc = self.description + "\n"
+        # Area name and description with color
+        desc = semantic(style(self.name, "bold"), "area_name") + "\n"
+        desc += self.description + "\n"
         
-        # Add exits
+        # Add exits with color
         if self.connections:
-            exits = ", ".join(self.connections.keys())
-            desc += f"\nExits: {exits}\n"
+            exits_list = []
+            for direction in self.connections.keys():
+                exits_list.append(semantic(direction, "direction"))
+            exits = ", ".join(exits_list)
+            desc += f"\n{style('Exits:', 'bold')} {exits}\n"
         
-        # Add items
+        # Add items with color based on item type
         if self.items:
-            item_names = ", ".join(str(item) for item in self.items)
-            desc += f"\nItems: {item_names}\n"
+            item_names = []
+            for item in self.items:
+                # Determine item category for coloring
+                category = "object"  # Default category
+                if hasattr(item, '__class__'):
+                    class_name = item.__class__.__name__.lower()
+                    if "weapon" in class_name:
+                        category = "weapon"
+                    elif "consumable" in class_name:
+                        category = "consumable"
+                    elif "effect" in class_name:
+                        category = "effect"
+                    elif "tech" in class_name or "usb" in class_name:
+                        category = "tech"
+                    elif "seed" in class_name or "plant" in class_name:
+                        category = "plant"
+                
+                item_names.append(semantic(str(item), category))
+            
+            items_str = ", ".join(item_names)
+            desc += f"\n{style('Items:', 'bold')} {items_str}\n"
         
         # Add NPCs, categorized by type
         if self.npcs:
@@ -69,33 +95,33 @@ class Area:
                         gang_name = npc.gang.name
                         if gang_name not in gang_members:
                             gang_members[gang_name] = []
-                        gang_members[gang_name].append(npc.name)
+                        gang_members[gang_name].append(semantic(npc.name, "gang_member"))
                     else:
                         # This is a civilian
-                        civilians.append(npc.name)
+                        civilians.append(semantic(npc.name, "civilian"))
             
-            # Add civilians
+            # Add civilians with color
             if civilians:
                 civilian_names = ", ".join(civilians)
-                desc += f"\nCivilians: {civilian_names}\n"
+                desc += f"\n{style('Civilians:', 'bold')} {civilian_names}\n"
             
-            # Add gang members by gang
+            # Add gang members by gang with color
             for gang_name, members in gang_members.items():
                 member_names = ", ".join(members)
-                desc += f"\n{gang_name} Members: {member_names}\n"
+                desc += f"\n{style(gang_name + ' Members:', 'bold')} {member_names}\n"
         
         # Add objects, separating hiding spots for clarity
         if self.objects:
-            # Regular objects
+            # Regular objects with color
             regular_objects = [obj for obj in self.objects if not hasattr(obj, 'is_occupied')]
             if regular_objects:
-                object_names = ", ".join(str(obj) for obj in regular_objects)
-                desc += f"\nObjects: {object_names}\n"
+                object_names = ", ".join(semantic(str(obj), "object") for obj in regular_objects)
+                desc += f"\n{style('Objects:', 'bold')} {object_names}\n"
             
-            # Hiding spots
+            # Hiding spots with color
             hiding_spots = [obj for obj in self.objects if hasattr(obj, 'is_occupied')]
             if hiding_spots:
-                hiding_spot_names = ", ".join(str(obj) for obj in hiding_spots)
-                desc += f"\nHiding Spots: {hiding_spot_names}\n"
+                hiding_spot_names = ", ".join(semantic(str(obj), "hiding") for obj in hiding_spots)
+                desc += f"\n{style('Hiding Spots:', 'bold')} {hiding_spot_names}\n"
         
         return desc

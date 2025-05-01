@@ -11,6 +11,7 @@ from npc_behavior import NPC, Civilian, Gang, GangMember, BehaviorType, Behavior
 from objects import Computer, HidingSpot
 from player import Player
 from area import Area
+from color_system import colorize, semantic, style, print_colored, print_semantic
 
 # ----------------------------- #
 # GAME MANAGEMENT               #
@@ -73,6 +74,15 @@ class Game:
             # System commands
             'help': {'handler': self.cmd_help, 'category': 'system'},
             'quit': {'handler': self.cmd_quit, 'category': 'system'},
+            
+            # Add take from command
+            'take_from': {'handler': self.cmd_take_from, 'category': 'interaction'},
+            'get_from': {'handler': self.cmd_take_from, 'category': 'interaction'},
+            
+            # Add stats command
+            'stats': {'handler': self.cmd_stats, 'category': 'system'},
+            'status': {'handler': self.cmd_stats, 'category': 'system'},
+            'health': {'handler': self.cmd_stats, 'category': 'system'},
         }
 
     def create_player(self):
@@ -294,33 +304,92 @@ class Game:
     def cmd_inventory(self, args):
         """Check your inventory."""
         if not self.player.inventory:
-            return "Your inventory is empty."
-        items = ", ".join(str(item) for item in self.player.inventory)
-        return f"Inventory: {items}"
+            return semantic("Your inventory is empty.", "info")
+        
+        # Categorize items for coloring
+        item_strings = []
+        for item in self.player.inventory:
+            # Determine item category for coloring
+            category = "object"  # Default category
+            if hasattr(item, '__class__'):
+                class_name = item.__class__.__name__.lower()
+                if "weapon" in class_name:
+                    category = "weapon"
+                elif "consumable" in class_name:
+                    category = "consumable"
+                elif "effect" in class_name:
+                    category = "effect"
+                elif "tech" in class_name or "usb" in class_name:
+                    category = "tech"
+                elif "seed" in class_name or "plant" in class_name:
+                    category = "plant"
+            
+            item_strings.append(semantic(str(item), category))
+        
+        items = ", ".join(item_strings)
+        return f"{style('Inventory:', 'bold')} {items}"
 
     def cmd_take(self, args):
         """Take an item from the area."""
         if not args:
-            return "Take what? Specify an item."
+            return semantic("Take what? Specify an item.", "warning")
+        
         item_name = " ".join(args)
         item = self.player.current_area.remove_item(item_name)
+        
         if item:
             self.player.add_item(item)
             self.update_turn()
-            return f"You take the {item.name}."
-        return f"There is no {item_name} here."
+            
+            # Determine item category for coloring
+            category = "object"  # Default category
+            if hasattr(item, '__class__'):
+                class_name = item.__class__.__name__.lower()
+                if "weapon" in class_name:
+                    category = "weapon"
+                elif "consumable" in class_name:
+                    category = "consumable"
+                elif "effect" in class_name:
+                    category = "effect"
+                elif "tech" in class_name or "usb" in class_name:
+                    category = "tech"
+                elif "seed" in class_name or "plant" in class_name:
+                    category = "plant"
+            
+            return semantic(f"You take the {item.name}.", "success")
+        
+        return semantic(f"There is no {item_name} here.", "warning")
 
     def cmd_drop(self, args):
         """Drop an item from your inventory."""
         if not args:
-            return "Drop what? Specify an item."
+            return semantic("Drop what? Specify an item.", "warning")
+        
         item_name = " ".join(args)
         item = self.player.remove_item(item_name)
+        
         if item:
             self.player.current_area.add_item(item)
             self.update_turn()
-            return f"You drop the {item.name}."
-        return f"You don't have a {item_name}."
+            
+            # Determine item category for coloring
+            category = "object"  # Default category
+            if hasattr(item, '__class__'):
+                class_name = item.__class__.__name__.lower()
+                if "weapon" in class_name:
+                    category = "weapon"
+                elif "consumable" in class_name:
+                    category = "consumable"
+                elif "effect" in class_name:
+                    category = "effect"
+                elif "tech" in class_name or "usb" in class_name:
+                    category = "tech"
+                elif "seed" in class_name or "plant" in class_name:
+                    category = "plant"
+            
+            return f"You drop the {semantic(item.name, category)}."
+        
+        return semantic(f"You don't have a {item_name}.", "warning")
 
     def cmd_use(self, args):
         """Use an item from your inventory."""
@@ -538,7 +607,17 @@ class Game:
 
     def cmd_help(self, args):
         """Show help information grouped by command category."""
-        help_text = ["Available commands:"]
+        help_text = [style("Available commands:", "bold")]
+        
+        # Define category colors
+        category_colors = {
+            "movement": "direction",
+            "interaction": "object",
+            "gardening": "gardening",
+            "stealth": "hiding",
+            "tech": "hacking",
+            "system": "system"
+        }
         
         # Group commands by category
         categories = {}
@@ -550,9 +629,21 @@ class Game:
         
         # Display commands by category
         for category in sorted(categories.keys()):
-            help_text.append(f"\n{category.capitalize()} commands:")
+            # Get the semantic color for this category
+            color_category = category_colors.get(category, "info")
+            
+            # Add the category header with color
+            category_header = style(f"\n{category.capitalize()} commands:", "bold")
+            help_text.append(semantic(category_header, color_category))
+            
+            # Add the commands with color
             cmd_list = sorted(categories[category])
-            help_text.append("  " + ", ".join(cmd_list))
+            colored_cmds = []
+            
+            for cmd in cmd_list:
+                colored_cmds.append(semantic(cmd, color_category))
+                
+            help_text.append("  " + ", ".join(colored_cmds))
         
         return "\n".join(help_text)
 
@@ -603,9 +694,84 @@ class Game:
                     for item in result[2]:
                         self.player.current_area.add_item(item)
                     breakable_obj.items.clear()
+                
+                # Make NPCs in the area react to the breaking
+                break_message = f"Someone {method}ed the {object_name}!"
+                for npc in self.player.current_area.npcs:
+                    if isinstance(npc, GangMember) and npc.is_alive:
+                        # Gang members become alerted and may investigate
+                        if random.random() < 0.7:  # 70% chance to investigate
+                            print(f"\n{npc.name} heard the noise and is investigating!")
+                            # Add gang to detected_by if player isn't hidden
+                            if not self.player.hidden:
+                                self.player.detected_by.add(npc.gang)
+                    elif isinstance(npc, Civilian) and npc.is_alive:
+                        # Civilians may flee or panic
+                        if random.random() < 0.5:  # 50% chance to react
+                            reaction = random.choice([
+                                f"{npc.name} jumps at the sudden noise!",
+                                f"{npc.name} looks around nervously.",
+                                f"{npc.name} backs away from the commotion."
+                            ])
+                            print(f"\n{reaction}")
+                
             return result[1]
         
         return f"You can't break the {object_name}."
+
+    def cmd_take_from(self, args):
+        """Take an item from a container or storage. Usage: take [item] from [container]"""
+        if not args or "from" not in args:
+            return "Usage: take [item] from [container]"
+        
+        from_index = args.index("from")
+        item_name = " ".join(args[:from_index])
+        container_name = " ".join(args[from_index+1:])
+        
+        # Find container in current area
+        container = next((obj for obj in self.player.current_area.objects 
+                         if obj.name.lower() == container_name.lower() and 
+                         hasattr(obj, 'items')), None)
+        
+        if not container:
+            return f"There is no {container_name} here."
+            
+        # Check if it's a vending machine or storage that needs to be open
+        if hasattr(container, 'is_open') and not container.is_open:
+            return f"The {container_name} is closed."
+            
+        # Try to take the item
+        item = next((item for item in container.items 
+                    if item.name.lower() == item_name.lower()), None)
+        
+        if not item:
+            return f"There is no {item_name} in the {container_name}."
+            
+        container.items.remove(item)
+        self.player.add_item(item)
+        self.update_turn()
+        return f"You take the {item.name} from the {container_name}."
+
+    def cmd_stats(self, args):
+        """Show player stats and status."""
+        stats = []
+        stats.append(f"Health: {self.player.health}/100")
+        
+        if self.player.hidden:
+            stats.append("Status: Hidden")
+        elif self.player.detected_by:
+            detected_gangs = ", ".join(gang.name for gang in self.player.detected_by)
+            stats.append(f"Status: Detected by {detected_gangs}")
+        else:
+            stats.append("Status: Undetected")
+            
+        if self.player.active_effects:
+            effects = []
+            for effect, turns in self.player.active_effects.items():
+                effects.append(f"{effect} ({turns} turns)")
+            stats.append(f"Active Effects: {', '.join(effects)}")
+            
+        return "\n".join(stats)
 
     def update_turn(self):
         """Update the game state for a new turn."""

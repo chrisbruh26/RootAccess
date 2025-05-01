@@ -628,61 +628,63 @@ class NPCBehaviorCoordinator:
             if self.npc_cooldowns[npc_id] <= 0:
                 del self.npc_cooldowns[npc_id]
                 
-    def get_npc_summary(self):
-        """
-        Get a summary of NPC actions for the current turn.
+    def add_effect_messages(self, affected_npcs, effect):
+        """Add batch effect messages to be summarized."""
+        if not affected_npcs:
+            return
+            
+        # Group NPCs by effect message for better summarization
+        effect_messages = {}
         
-        Returns:
-            A string summarizing NPC actions, or None if no actions occurred.
-        """
+        for npc in affected_npcs:
+            message = None
+            if isinstance(effect, HallucinationEffect):
+                message = effect.get_hallucination_message()
+            elif isinstance(effect, ConfusionEffect):
+                message = effect.get_confusion_message()
+                
+            if message:
+                if message not in effect_messages:
+                    effect_messages[message] = []
+                effect_messages[message].append(npc.name)
+        
+        # Create summarized messages
+        for message, npc_names in effect_messages.items():
+            if len(npc_names) > 2:
+                # Group message for 3 or more NPCs
+                self.action_messages.append(f"Several NPCs {message}")
+            elif len(npc_names) == 2:
+                # Pair message for 2 NPCs
+                self.action_messages.append(f"{npc_names[0]} and {npc_names[1]} {message}")
+            else:
+                # Individual message for 1 NPC
+                self.action_messages.append(f"{npc_names[0]} {message}")
+    
+    def get_npc_summary(self):
+        """Get a summary of NPC actions for the current turn."""
         if not self.action_messages:
             return None
             
         # Group similar actions together
-        gang_actions = []
+        effect_actions = []
         combat_actions = []
-        item_actions = []
-        talk_actions = []
         other_actions = []
         
         for message in self.action_messages:
-            if "attacks" in message.lower() or "damage" in message.lower():
+            if "Several NPCs" in message or message.count(" and ") > 0:
+                effect_actions.append(message)
+            elif "attacks" in message.lower() or "damage" in message.lower():
                 combat_actions.append(message)
-            elif "gang" in message.lower() or "member" in message.lower():
-                gang_actions.append(message)
-            elif "uses" in message.lower() or "item" in message.lower():
-                item_actions.append(message)
-            elif "talks" in message.lower() or "chat" in message.lower():
-                talk_actions.append(message)
             else:
                 other_actions.append(message)
         
-        # Create a natural language summary
+        # Prioritize and combine messages
         summary_parts = []
-        
-        # Start with combat actions as they're most important
+        if effect_actions:
+            summary_parts.extend(effect_actions[:2])  # Limit group effects to 2 messages
         if combat_actions:
-            summary_parts.extend(combat_actions)
-        
-        # Add connecting phrases between different action types
-        connectors = ["Meanwhile, ", "At the same time, ", "Nearby, ", "Elsewhere, ", "Also, ", "Fascinatingly, ", "Interestingly, ", "Wide awake, "]
-        
-        # Add other action types with connectors
-        action_groups = [gang_actions, item_actions, talk_actions, other_actions]
-        for group in action_groups:
-            if group and summary_parts:
-                summary_parts.append(random.choice(connectors) + group[0])
-                group = group[1:]  # Remove the first item we just added
-            
-            # Add a few more from this group if available
-            for action in group[:2]:  # Limit to 2 more actions per group
-                if summary_parts:
-                    summary_parts.append(random.choice(connectors) + action)
-                else:
-                    summary_parts.append(action)
-        
-        # Join everything into a single paragraph
-        if not summary_parts:
-            return None
+            summary_parts.extend(combat_actions[:2])  # Limit combat messages to 2
+        if other_actions and len(summary_parts) < 4:
+            summary_parts.extend(other_actions[:2])   # Add up to 2 other actions
             
         return " ".join(summary_parts)

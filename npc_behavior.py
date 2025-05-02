@@ -687,13 +687,35 @@ class NPCBehaviorCoordinator:
         if other_actions:
             summary_parts.extend(self._combine_messages_with_punctuation(other_actions, max_count=3))
             
-        # Join all summaries with periods
-        return ". ".join(summary_parts) + "."
+        # Join all summaries with appropriate punctuation
+        result = ""
+        for i, part in enumerate(summary_parts):
+            # If this is not the first part, add a space
+            if i > 0:
+                result += " "
+                
+            # Add the part to the result
+            result += part
+            
+            # If this is not the last part, add appropriate separator
+            if i < len(summary_parts) - 1:
+                # If the part already ends with an exclamation mark, use that as the separator
+                if part.endswith("!"):
+                    result += ""
+                else:
+                    result += "."
+        
+        # Ensure the summary ends with punctuation
+        if not result.endswith(".") and not result.endswith("!"):
+            result += "."
+            
+        return result
 
     def _clean_message(self, message):
         """Clean and normalize message punctuation."""
-        # Remove trailing periods, keeping ? and ! intact
-        if message.endswith('.'):
+        # Remove trailing periods and exclamation marks
+        # This allows us to add appropriate punctuation based on context
+        if message.endswith('.') or message.endswith('!'):
             message = message[:-1]
         return message
 
@@ -725,9 +747,35 @@ class NPCBehaviorCoordinator:
                         ". Meanwhile, " # separate sentences
                     ], weights=[40, 30, 20, 10])[0]
                 
-                combined.append(cleaned_messages[i] + connector + cleaned_messages[i + 1])
+                # Check if the combined message should have an exclamation mark
+                first_msg = cleaned_messages[i]
+                second_msg = cleaned_messages[i + 1]
+                combined_msg = first_msg + connector + second_msg
+                
+                # Add exclamation mark if either message contains exciting content
+                exciting_words = ["attack", "defeat", "discover", "drag", "hostile", "damage", 
+                                 "fight", "break", "destroy", "crash", "explode", "yell", "scream"]
+                
+                if (any(word in first_msg.lower() for word in exciting_words) or 
+                    any(word in second_msg.lower() for word in exciting_words)):
+                    # Only add exclamation if the connector doesn't already end with punctuation
+                    if not connector.strip().endswith('.'):
+                        combined_msg += "!"
+                
+                combined.append(combined_msg)
                 i += 2
             else:
-                combined.append(cleaned_messages[i])
+                # Add appropriate punctuation based on message content
+                message = cleaned_messages[i]
+                
+                # Check if the message should have an exclamation mark
+                if any(exciting_word in message.lower() for exciting_word in 
+                      ["attack", "defeat", "discover", "drag", "hostile", "damage", 
+                       "fight", "break", "destroy", "crash", "explode", "yell", "scream"]):
+                    # Add exclamation for exciting/dramatic actions
+                    combined.append(message + "!")
+                else:
+                    # Keep as is for normal actions (no exclamation)
+                    combined.append(message)
                 i += 1
         return combined

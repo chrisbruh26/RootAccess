@@ -1,4 +1,3 @@
-
 import random
 import json
 import os
@@ -666,7 +665,7 @@ class NPCBehaviorCoordinator:
         if not self.action_messages:
             return None
             
-        # Group similar actions together
+        # Group actions by type
         effect_actions = []
         combat_actions = []
         other_actions = []
@@ -679,13 +678,37 @@ class NPCBehaviorCoordinator:
             else:
                 other_actions.append(message)
         
-        # Prioritize and combine messages
+        # Combine messages with varying connectors
+        def combine_messages(messages, max_count=2):
+            if not messages:
+                return []
+                
+            combined = []
+            i = 0
+            while i < len(messages) and len(combined) < max_count:
+                if i + 1 < len(messages):
+                    # Randomly choose a connector
+                    connector = random.choice([
+                        "; ",  # semicolon
+                        ", while ",  # while connector
+                        " as ",  # as connector
+                        ". Meanwhile, "  # separate sentences
+                    ])
+                    combined.append(messages[i] + connector + messages[i + 1])
+                    i += 2
+                else:
+                    combined.append(messages[i])
+                    i += 1
+            return combined
+
+        # Combine each type of action
         summary_parts = []
         if effect_actions:
-            summary_parts.extend(effect_actions[:2])  # Limit group effects to 2 messages
+            summary_parts.extend(combine_messages(effect_actions))
         if combat_actions:
-            summary_parts.extend(combat_actions[:2])  # Limit combat messages to 2
-        if other_actions and len(summary_parts) < 4:
-            summary_parts.extend(other_actions[:2])   # Add up to 2 other actions
+            summary_parts.extend(combine_messages(combat_actions))
+        if other_actions:
+            summary_parts.extend(combine_messages(other_actions, max_count=3))
             
+        # Join different types of summaries with periods
         return " ".join(summary_parts)

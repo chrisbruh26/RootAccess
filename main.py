@@ -226,6 +226,7 @@ class Game:
             self.areas["garden"].add_npc(Civilian(name, f"A random civilian named {name}."))
             self.areas["garden"].npcs[-1].add_item(watering_can)
             self.areas["garden"].npcs[-1].add_item(carrot_seed)
+            self.areas["garden"].npcs[-1].add_item(hacked_milk_blaster)
 
         for i in range(5):
             name = random.choice(bloodhounds_names)
@@ -238,8 +239,9 @@ class Game:
             self.areas["warehouse"].add_item(carrot_seed)
 
 
+        machine_gun = Weapon("Machine Gun", "A machine gun.", 100, 50)
 
-            self.player.add_item(gun)
+        self.player.add_item(machine_gun)
 
 
         

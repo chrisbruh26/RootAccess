@@ -678,37 +678,56 @@ class NPCBehaviorCoordinator:
             else:
                 other_actions.append(message)
         
-        # Combine messages with varying connectors
-        def combine_messages(messages, max_count=2):
-            if not messages:
-                return []
-                
-            combined = []
-            i = 0
-            while i < len(messages) and len(combined) < max_count:
-                if i + 1 < len(messages):
-                    # Randomly choose a connector
-                    connector = random.choice([
-                        "; ",  # semicolon
-                        ", while ",  # while connector
-                        " as ",  # as connector
-                        ". Meanwhile, "  # separate sentences
-                    ])
-                    combined.append(messages[i] + connector + messages[i + 1])
-                    i += 2
-                else:
-                    combined.append(messages[i])
-                    i += 1
-            return combined
-
-        # Combine each type of action
+        # Combine each type of action with appropriate punctuation
         summary_parts = []
         if effect_actions:
-            summary_parts.extend(combine_messages(effect_actions))
+            summary_parts.extend(self._combine_messages_with_punctuation(effect_actions))
         if combat_actions:
-            summary_parts.extend(combine_messages(combat_actions))
+            summary_parts.extend(self._combine_messages_with_punctuation(combat_actions))
         if other_actions:
-            summary_parts.extend(combine_messages(other_actions, max_count=3))
+            summary_parts.extend(self._combine_messages_with_punctuation(other_actions, max_count=3))
             
-        # Join different types of summaries with periods
-        return " ".join(summary_parts)
+        # Join all summaries with periods
+        return ". ".join(summary_parts) + "."
+
+    def _clean_message(self, message):
+        """Clean and normalize message punctuation."""
+        # Remove trailing periods, keeping ? and ! intact
+        if message.endswith('.'):
+            message = message[:-1]
+        return message
+
+    def _combine_messages_with_punctuation(self, messages, max_count=2):
+        """Combine messages with appropriate punctuation."""
+        if not messages:
+            return []
+            
+        # Clean messages first
+        cleaned_messages = [self._clean_message(msg) for msg in messages]
+        
+        combined = []
+        i = 0
+        while i < len(cleaned_messages) and len(combined) < max_count:
+            if i + 1 < len(cleaned_messages):
+                # Choose connector based on message content
+                if "attacks" in cleaned_messages[i].lower() and "attacks" in cleaned_messages[i+1].lower():
+                    # Use semicolons for related combat actions
+                    connector = "; "
+                elif any(word in cleaned_messages[i].lower() for word in ["picks up", "uses", "examines"]):
+                    # Use "while" for simultaneous non-combat actions
+                    connector = ", while "
+                else:
+                    # Randomly choose a connector with weights
+                    connector = random.choices([
+                        "; ",           # semicolon
+                        ", while ",     # while connector
+                        " as ",         # as connector
+                        ". Meanwhile, " # separate sentences
+                    ], weights=[40, 30, 20, 10])[0]
+                
+                combined.append(cleaned_messages[i] + connector + cleaned_messages[i + 1])
+                i += 2
+            else:
+                combined.append(cleaned_messages[i])
+                i += 1
+        return combined

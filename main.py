@@ -25,6 +25,11 @@ class Game:
         self.npc_coordinator = NPCBehaviorCoordinator()
         self.running = True
         
+        # Weapon targeting system
+        self.targeting_weapon = None
+        self.targeting_npcs = None
+        self.in_targeting_mode = False
+        
         # Initialize command system
         self.commands = {
             # Movement commands
@@ -54,6 +59,9 @@ class Game:
             'break': {'handler': self.cmd_break, 'category': 'interaction'},
             'smash': {'handler': self.cmd_break, 'category': 'interaction'},
             'shoot': {'handler': self.cmd_break, 'category': 'interaction'},
+            
+            # Combat commands
+            'attack': {'handler': self.cmd_attack, 'category': 'combat'},
             
             # Plant/garden commands
             'plant': {'handler': self.cmd_plant, 'category': 'gardening'},
@@ -258,6 +266,37 @@ class Game:
         if not parts:
             return "Please enter a command."
         
+        # Check if we're in targeting mode
+        if self.targeting_weapon and self.targeting_npcs:
+            # If user types 'cancel', exit targeting mode
+            if command.lower() == 'cancel':
+                self.targeting_weapon = None
+                self.targeting_npcs = None
+                return "Targeting canceled."
+                
+            # Try to find the target NPC by name
+            target_name = command
+            target = next((npc for npc in self.targeting_npcs if npc.name.lower() == target_name.lower()), None)
+            
+            if target:
+                # Attack the target with the weapon
+                result = self.targeting_weapon.attack_npc(self.player, target)
+                
+                # Reset targeting
+                self.targeting_weapon = None
+                self.targeting_npcs = None
+                
+                # Update turn after attack
+                self.update_turn()
+                
+                return result[1]
+            else:
+                # If target not found, show available targets again
+                npc_names = [npc.name for npc in self.targeting_npcs]
+                npc_list = ", ".join(npc_names)
+                return f"Target not found. You can target: {npc_list}\nType the name of the NPC you want to attack, or 'cancel' to stop."
+        
+        # Normal command processing
         action = parts[0]
         args = parts[1:]
 
@@ -267,6 +306,36 @@ class Game:
             return cmd_entry['handler'](args)
 
         return "Unknown command. Type 'help' for a list of commands."
+        
+    def cmd_attack(self, args):
+        """Attack an NPC with your equipped weapon."""
+        if not args:
+            return "Attack who? Specify a target."
+            
+        # Find weapons in inventory
+        weapons = [item for item in self.player.inventory if hasattr(item, 'damage')]
+        
+        if not weapons:
+            return "You don't have any weapons to attack with."
+            
+        # Get target name
+        target_name = " ".join(args)
+        
+        # Find target NPC
+        target = next((npc for npc in self.player.current_area.npcs 
+                      if npc.name.lower() == target_name.lower() and npc.is_alive), None)
+                      
+        if not target:
+            return f"There is no {target_name} here to attack."
+            
+        # Use the first weapon in inventory
+        weapon = weapons[0]
+        result = weapon.attack_npc(self.player, target)
+        
+        # Update turn after attack
+        self.update_turn()
+        
+        return result[1]
 
     # Command handlers
     def cmd_move(self, args):
@@ -328,6 +397,14 @@ class Game:
             return "Use what? Specify an item."
         item_name = " ".join(args)
         result = self.player.use_item(item_name, self)
+        
+        # Check if this is a weapon targeting request
+        if len(result) > 2 and result[2] == "target_selection":
+            # Store the weapon and potential targets for later use
+            self.targeting_weapon = next((i for i in self.player.inventory if i.name.lower() == item_name.lower()), None)
+            self.targeting_npcs = result[3]
+            return result[1]
+        
         if result[0]:
             self.update_turn()
             return result[1]

@@ -3,7 +3,7 @@ import os
 import json
 
 # Import game modules
-from items import Item, Weapon, Consumable, EffectItem
+from items import Item, Weapon, Consumable, EffectItem, SmokeBomb, Decoy
 from objects import VendingMachine
 from gardening import Seed, Plant, SoilPlot, WateringCan
 from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
@@ -240,13 +240,19 @@ class Game:
 
 
         machine_gun = Weapon("Machine Gun", "A machine gun.", 100, 50)
+        smoke_bomb = SmokeBomb()
+        tech_decoy = Decoy()
 
         self.player.add_item(machine_gun)
-
-
+        self.player.add_item(smoke_bomb)
+        self.player.add_item(tech_decoy)
         
-
-
+        # Add smoke bombs and decoys to various areas for the player to find
+        self.areas["alley"].add_item(SmokeBomb())
+        self.areas["street"].add_item(SmokeBomb())
+        self.areas["warehouse"].add_item(Decoy())
+        self.areas["garden"].add_item(Decoy())
+        self.areas["Home"].add_item(carrot_seed)
 
         self.areas["warehouse"].add_npc(Civilian("John", "A random guy."))
 
@@ -695,8 +701,205 @@ class Game:
         if expired_effects:
             print(f"Effects expired: {', '.join(expired_effects)}")
         
+        # Check for random events (10% chance per turn)
+        if random.random() < 0.1:
+            self.trigger_random_event()
+        
         # Process NPC behaviors in the current area
         npc_messages = self.npc_coordinator.process_npc_behaviors(self, self.player.current_area.npcs)
+        
+    def trigger_random_event(self):
+        """Trigger a random event in the current area."""
+        # List of possible random events
+        events = [
+            self.event_rival_gang_appears,
+            self.event_tech_malfunction,
+            self.event_plant_mutation,
+            self.event_mass_confusion
+        ]
+        
+        # Choose and trigger a random event
+        event = random.choice(events)
+        event()
+        
+    def event_rival_gang_appears(self):
+        """Random event: A rival gang appears and starts a fight."""
+        # Only trigger in areas that make sense (not Home)
+        if self.player.current_area.name == "Home":
+            return
+            
+        # Get all gangs in the area
+        gangs_present = set()
+        for npc in self.player.current_area.npcs:
+            if hasattr(npc, 'gang'):
+                gangs_present.add(npc.gang.name)
+                
+        # If there's only one or no gangs, bring in a rival
+        if len(gangs_present) <= 1:
+            # Choose a rival gang that's not already present
+            available_gangs = [gang for gang_name, gang in self.gangs.items() 
+                              if gang_name not in gangs_present]
+            
+            if not available_gangs:
+                return  # No available rival gangs
+                
+            rival_gang = random.choice(available_gangs)
+            
+            # Create 1-3 rival gang members
+            num_rivals = random.randint(1, 3)
+            
+            # Gang member name lists
+            bloodhounds_names = ["Buck", "Bubbles", "Boop", "Noodle", "Flop", "Squirt", "Squeaky", "Gus-Gus", "Puddles", "Muffin", "Binky", "Beep-Beep"]
+            crimson_vipers_names = ["Vipoop", "Snakle", "Rattlesnop", "Pythirt", "Anaceaky", "Cobrus-brus", "Lizuddles", "Viperino", "Slitherpuff", "Hissypants", "Slinker", "Snakester"]
+            
+            # Choose appropriate name list
+            if rival_gang.name == "Crimson Vipers":
+                name_list = crimson_vipers_names
+            else:
+                name_list = bloodhounds_names
+                
+            # Add rival gang members
+            for i in range(num_rivals):
+                if name_list:
+                    name = random.choice(name_list)
+                    name_list.remove(name)
+                else:
+                    # Generate a random name if we run out
+                    name = f"{rival_gang.name[0]}-{random.randint(1, 100)}"
+                    
+                # Create and add the gang member
+                rival = GangMember(name, f"A member of the {rival_gang.name} named {name}.", rival_gang)
+                self.player.current_area.add_npc(rival)
+                
+                # Give them weapons and items
+                gun = Weapon("Gun", "A standard firearm.", 50, 20)
+                rival.add_item(gun)
+                
+                # 50% chance to have an effect item
+                if random.random() < 0.5:
+                    effect_item = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, ConfusionEffect())
+                    rival.add_item(effect_item)
+            
+            print(f"\n*** RANDOM EVENT: A group of {rival_gang.name} members has appeared! ***")
+            
+            # Make them immediately hostile to other gangs
+            for npc in self.player.current_area.npcs:
+                if hasattr(npc, 'gang') and npc.gang != rival_gang:
+                    # Force an attack between rival gang members
+                    for rival_member in [n for n in self.player.current_area.npcs if hasattr(n, 'gang') and n.gang == rival_gang]:
+                        attack_result = rival_member.attack_npc(npc)
+                        if attack_result:
+                            print(attack_result)
+                            break
+                    break
+        
+    def event_tech_malfunction(self):
+        """Random event: Technology in the area malfunctions, causing distractions."""
+        # Check if there are any tech objects in the area
+        tech_objects = [obj for obj in self.player.current_area.objects 
+                       if hasattr(obj, 'is_electronic') and obj.is_electronic]
+        
+        if not tech_objects:
+            return  # No tech objects to malfunction
+            
+        # Choose a random tech object
+        tech_object = random.choice(tech_objects)
+        
+        # Generate a malfunction effect
+        effects = [
+            f"The {tech_object.name} suddenly sparks and emits a loud noise!",
+            f"The {tech_object.name} starts flashing with bright lights!",
+            f"The {tech_object.name} makes a series of strange beeping sounds!"
+        ]
+        
+        effect = random.choice(effects)
+        print(f"\n*** RANDOM EVENT: TECH MALFUNCTION ***\n{effect}")
+        
+        # Distract NPCs - 50% chance for each NPC to be affected
+        affected_npcs = []
+        for npc in self.player.current_area.npcs:
+            if random.random() < 0.5 and hasattr(npc, 'active_effects'):
+                # Create a temporary confusion effect
+                confusion = ConfusionEffect()
+                confusion.remaining_turns = 1  # Only lasts 1 turn
+                npc.active_effects.append(confusion)
+                affected_npcs.append(npc)
+                
+        # If player was detected, 30% chance to lose detection
+        if self.player.detected_by and random.random() < 0.3:
+            # Choose one random gang to lose detection
+            if self.player.detected_by:
+                gang_to_forget = random.choice(list(self.player.detected_by))
+                self.player.detected_by.remove(gang_to_forget)
+                print(f"The {gang_to_forget.name} seem distracted by the malfunction and have lost track of you!")
+        
+    def event_plant_mutation(self):
+        """Random event: Plants in the area mutate and release strange effects."""
+        # Check if there are any soil plots with plants
+        soil_plots = [obj for obj in self.player.current_area.objects 
+                     if hasattr(obj, 'plants') and obj.plants]
+        
+        if not soil_plots:
+            return  # No plants to mutate
+            
+        # Choose a random soil plot
+        soil = random.choice(soil_plots)
+        
+        # Choose a random plant
+        if not soil.plants:
+            return
+            
+        plant = random.choice(soil.plants)
+        
+        # Generate a mutation effect
+        effects = [
+            f"The {plant.name} suddenly grows to twice its size!",
+            f"The {plant.name} releases a cloud of spores!",
+            f"The {plant.name} starts glowing with an eerie light!",
+            f"The {plant.name} makes a strange rustling sound!"
+        ]
+        
+        effect = random.choice(effects)
+        print(f"\n*** RANDOM EVENT: PLANT MUTATION ***\n{effect}")
+        
+        # Apply random effects to NPCs
+        for npc in self.player.current_area.npcs:
+            if hasattr(npc, 'active_effects') and random.random() < 0.4:  # 40% chance
+                # Choose between hallucination and confusion
+                if random.random() < 0.5:
+                    effect = HallucinationEffect()
+                else:
+                    effect = ConfusionEffect()
+                    
+                npc.active_effects.append(effect)
+                print(f"{npc.name} is affected by the plant mutation!")
+                
+        # 20% chance to heal the player a bit
+        if random.random() < 0.2:
+            heal_amount = random.randint(5, 15)
+            self.player.health = min(self.player.max_health, self.player.health + heal_amount)
+            print(f"You feel rejuvenated by the plant's energy! (+{heal_amount} health)")
+        
+    def event_mass_confusion(self):
+        """Random event: A wave of confusion sweeps through the area."""
+        # Only trigger if there are NPCs in the area
+        if not self.player.current_area.npcs:
+            return
+            
+        print("\n*** RANDOM EVENT: MASS CONFUSION ***")
+        print("A strange wave of energy pulses through the area!")
+        
+        # Apply confusion to most NPCs
+        affected_npcs = []
+        for npc in self.player.current_area.npcs:
+            if hasattr(npc, 'active_effects') and random.random() < 0.7:  # 70% chance
+                confusion = ConfusionEffect()
+                npc.active_effects.append(confusion)
+                affected_npcs.append(npc)
+                
+        # If NPCs were affected, add effect messages
+        if affected_npcs and self.npc_coordinator:
+            self.npc_coordinator.add_effect_messages(affected_npcs, ConfusionEffect())
         
         # Display NPC action summary
         npc_summary = self.npc_coordinator.get_npc_summary()
@@ -736,6 +939,51 @@ class Game:
                         if hasattr(plant, 'grow') and random.random() < 0.3:  # 30% chance to grow each turn
                             plant.grow()
     
+    def respawn_player(self):
+        """Respawn the player at their home after death."""
+        print("\n*** You have been defeated! ***")
+        print("You wake up back at home, feeling disoriented...")
+        
+        # Reset player health
+        self.player.health = self.player.max_health
+        
+        # Move player back to home
+        self.player.current_area = self.areas["Home"]
+        
+        # Clear detection status
+        self.player.detected_by.clear()
+        
+        # If player was hidden, reset hiding status
+        if self.player.hidden:
+            if self.player.hiding_spot:
+                self.player.hiding_spot.is_occupied = False
+                self.player.hiding_spot.occupant = None
+            self.player.hiding_spot = None
+            self.player.hidden = False
+        
+        # Lose some items (50% chance to lose each item)
+        lost_items = []
+        kept_items = []
+        
+        for item in self.player.inventory[:]:  # Create a copy to iterate over
+            if random.random() < 0.5:  # 50% chance to lose the item
+                self.player.inventory.remove(item)
+                lost_items.append(item.name)
+            else:
+                kept_items.append(item.name)
+        
+        # Print status message
+        print(f"\nYou've respawned at Home with {self.player.health} health.")
+        
+        if lost_items:
+            print(f"You lost some items in the process: {', '.join(lost_items)}")
+        
+        if kept_items:
+            print(f"You managed to keep: {', '.join(kept_items)}")
+        
+        # Show the current area description
+        print("\n" + self.player.current_area.get_full_description())
+    
     def run(self):
         """Run the main game loop."""
         print("Welcome to Root Access!")
@@ -751,8 +999,8 @@ class Game:
             
             # Check if player is dead
             if self.player.health <= 0:
-                print("You have been defeated! Game over.")
-                self.running = False
+                self.respawn_player()
+                continue
 
 
 # ----------------------------- #

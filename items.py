@@ -24,9 +24,24 @@ class Weapon(Item):
         return f"{self.name} (Damage: {self.damage})"
         
     def use(self, player, game):
-        """Use the weapon, only handling damage and breaking objects."""
+        """Use the weapon, handling damage to NPCs and breaking objects."""
         messages = []
         messages.append(f"You use the {self.name}!")
+        
+        # Check if there are NPCs in the area to target
+        if player.current_area and player.current_area.npcs:
+            # Get a list of alive NPCs
+            alive_npcs = [npc for npc in player.current_area.npcs if hasattr(npc, 'is_alive') and npc.is_alive]
+            
+            if alive_npcs:
+                # Ask player which NPC to attack
+                npc_names = [npc.name for npc in alive_npcs]
+                npc_list = ", ".join(npc_names)
+                messages.append(f"You can target: {npc_list}")
+                messages.append("Type the name of the NPC you want to attack, or 'cancel' to stop.")
+                
+                # Return a special message that the game loop will handle to get player input
+                return True, "\n".join(messages), "target_selection", alive_npcs
         
         # Check for breakable objects in the area
         if player.current_area and player.current_area.objects:
@@ -51,6 +66,37 @@ class Weapon(Item):
                     if result[0]:
                         messages.append(result[1])
         
+        return True, "\n".join(messages)
+        
+    def attack_npc(self, player, target_npc):
+        """Attack a specific NPC with this weapon."""
+        messages = []
+        
+        # Calculate damage (random value between half and full damage)
+        damage = random.randint(self.damage // 2, self.damage)
+        
+        # Apply damage to the target
+        if hasattr(target_npc, 'health'):
+            target_npc.health -= damage
+            
+            # Check if target died
+            if target_npc.health <= 0:
+                target_npc.is_alive = False
+                if hasattr(target_npc, 'gang'):
+                    target_npc.gang.remove_member(target_npc)
+                messages.append(f"You attack {target_npc.name} with your {self.name} for {damage} damage, defeating them!")
+            else:
+                messages.append(f"You attack {target_npc.name} with your {self.name} for {damage} damage!")
+                
+                # If target is a gang member, they might become hostile
+                if hasattr(target_npc, 'gang') and hasattr(player, 'detected_by'):
+                    player.detected_by.add(target_npc.gang)
+                    messages.append(f"The {target_npc.gang.name} are now hostile toward you!")
+        else:
+            # For NPCs without health attribute
+            target_npc.is_alive = False
+            messages.append(f"You attack and defeat {target_npc.name} with your {self.name}!")
+            
         return True, "\n".join(messages)
     
 class EffectItem(Item):
@@ -85,8 +131,18 @@ class EffectItem(Item):
             # Add the effect messages to the NPC coordinator
             if game and game.npc_coordinator:
                 game.npc_coordinator.add_effect_messages(affected_npcs, self.effect)
+            
+            # Add more detailed message about affected NPCs
+            if affected_npcs:
+                if len(affected_npcs) == 1:
+                    messages.append(f"{affected_npcs[0].name} is affected by the {self.effect.name} effect!")
+                elif len(affected_npcs) <= 3:
+                    npc_names = ", ".join(npc.name for npc in affected_npcs)
+                    messages.append(f"{npc_names} are affected by the {self.effect.name} effect!")
+                else:
+                    messages.append(f"Several NPCs are affected by the {self.effect.name} effect!")
         
-        return True, messages[0]
+        return True, "\n".join(messages)
 
 class Consumable(Item):
     def __init__(self, name, description, value, health_restore):

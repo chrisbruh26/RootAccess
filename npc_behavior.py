@@ -512,6 +512,64 @@ class NPCBehaviorCoordinator:
                         npc.items.remove(item)
                         return f"{npc.name} plants {item.name} in the {soil.name}."
             
+            # If it's a weapon, use it against another NPC
+            if hasattr(item, 'damage'):
+                # Find a target NPC in the same area
+                potential_targets = [other for other in npc.location.npcs 
+                                    if other != npc and other.is_alive]
+                                    
+                if potential_targets and random.random() < 0.6:  # 60% chance to use weapon if targets exist
+                    target = random.choice(potential_targets)
+                    
+                    # Check if they're from different gangs (if they're gang members)
+                    if (isinstance(npc, GangMember) and isinstance(target, GangMember) and 
+                        npc.gang.name != target.gang.name):
+                        # Apply damage to target
+                        if hasattr(target, 'health'):
+                            damage = random.randint(item.damage // 2, item.damage)
+                            target.health -= damage
+                            
+                            # Check if target died
+                            if target.health <= 0:
+                                target.is_alive = False
+                                if hasattr(target, 'gang'):
+                                    target.gang.remove_member(target)
+                                return f"{npc.name} uses {item.name} to attack {target.name} for {damage} damage, defeating them!"
+                            
+                            return f"{npc.name} uses {item.name} to attack {target.name} for {damage} damage!"
+                    
+                    # If they're not gang members or from the same gang, just threaten
+                    elif random.random() < 0.3:  # 30% chance to threaten
+                        return f"{npc.name} threatens {target.name} with {item.name}!"
+            
+            # If it's an effect item, use it on other NPCs
+            if hasattr(item, 'effect'):
+                affected_npcs = []
+                
+                # Apply effect to other NPCs in the area
+                for other_npc in npc.location.npcs:
+                    # Skip dead NPCs and self
+                    if other_npc == npc or not other_npc.is_alive:
+                        continue
+                        
+                    # Apply the effect to the NPC
+                    if hasattr(other_npc, 'active_effects'):
+                        # Create a new instance of the effect for this NPC
+                        effect_copy = type(item.effect)()
+                        other_npc.active_effects.append(effect_copy)
+                        affected_npcs.append(other_npc)
+                
+                # If NPCs were affected, return a message
+                if affected_npcs:
+                    # Add the effect messages to the NPC coordinator
+                    if game and game.npc_coordinator:
+                        game.npc_coordinator.add_effect_messages(affected_npcs, item.effect)
+                    
+                    if len(affected_npcs) == 1:
+                        return f"{npc.name} uses {item.name} on {affected_npcs[0].name}!"
+                    else:
+                        return f"{npc.name} uses {item.name} on several NPCs!"
+            
             # If it's a consumable, use it
             if hasattr(item, 'health_restore'):
                 if hasattr(npc, 'health'):

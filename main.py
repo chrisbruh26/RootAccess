@@ -708,6 +708,17 @@ class Game:
         # Process NPC behaviors in the current area
         npc_messages = self.npc_coordinator.process_npc_behaviors(self, self.player.current_area.npcs)
         
+        # Display NPC action summary
+        npc_summary = self.npc_coordinator.get_npc_summary()
+        if npc_summary:
+            # If player is hidden, add a stealth indicator
+            if self.player.hidden:
+                print("\n[STEALTH MODE ACTIVE]")
+            
+            print("\nNPC ACTIONS:")
+            print(npc_summary)
+            print()
+        
     def trigger_random_event(self):
         """Trigger a random event in the current area."""
         # List of possible random events
@@ -725,7 +736,7 @@ class Game:
     def event_rival_gang_appears(self):
         """Random event: A rival gang appears and starts a fight."""
         # Only trigger in areas that make sense (not Home)
-        if self.player.current_area.name == "Home":
+        if self.player.current_area.name != "warehouse":
             return
             
         # Get all gangs in the area
@@ -901,17 +912,6 @@ class Game:
         if affected_npcs and self.npc_coordinator:
             self.npc_coordinator.add_effect_messages(affected_npcs, ConfusionEffect())
         
-        # Display NPC action summary
-        npc_summary = self.npc_coordinator.get_npc_summary()
-        if npc_summary:
-            # If player is hidden, add a stealth indicator
-            if self.player.hidden:
-                print("\n[STEALTH MODE ACTIVE]")
-            
-            print("\nNPC ACTIONS:")
-            print(npc_summary)
-            print()
-        
         # If player is hidden, there's a small chance they get discovered anyway
         if self.player.hidden and random.random() < 0.05:  # 5% chance per turn
             # Only if there are gang members in the area
@@ -972,8 +972,18 @@ class Game:
             else:
                 kept_items.append(item.name)
         
+        # Add some health items to help the player recover
+        energy_drink = Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20)
+        self.player.add_item(energy_drink)
+        self.player.add_item(SmokeBomb())  # Always give a smoke bomb for escape
+        
+        # 50% chance to get a decoy
+        if random.random() < 0.5:
+            self.player.add_item(Decoy())
+        
         # Print status message
         print(f"\nYou've respawned at Home with {self.player.health} health.")
+        print("You found some supplies to help you recover.")
         
         if lost_items:
             print(f"You lost some items in the process: {', '.join(lost_items)}")

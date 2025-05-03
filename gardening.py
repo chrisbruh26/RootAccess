@@ -154,6 +154,7 @@ class SoilPlot:
         
         # Check if the watering can has water
         if watering_can.current_water <= 0:
+
             return False, f"The {watering_can.name} is empty. It needs to be filled first."
         
         # Water the plants
@@ -221,7 +222,8 @@ class WateringCan:
         """
         # Check if the watering can has water
         if self.current_water <= 0:
-            return False, f"The {self.name} is empty. It needs to be filled first."
+            self.fill()
+            return False, f"The {self.name} has been automatically refilled."
         
         # Handle different target types
         if hasattr(target, 'water_plants'):

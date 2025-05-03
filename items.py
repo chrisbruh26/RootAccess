@@ -1,5 +1,6 @@
 import random
 from effects import HallucinationEffect, ConfusionEffect
+import time
 
 # ----------------------------- #
 # ITEM CLASSES                  #
@@ -256,11 +257,35 @@ class Consumable(Item):
     def __str__(self):
         return f"{self.name} (Restores: {self.health_restore} health)"
     
+    def use(self, player, game):
+        """Use the consumable to restore health."""
+        player.health = min(player.max_health, player.health + self.health_restore)
+        player.inventory.remove(self)
+        return True, f"You consume the {self.name} and restore {self.health_restore} health."
+
 
 class TechItem(Item):
-    def __init__(self, name, description, value, tech_type):
+    """Base class for technology items that can be used for hacking and other tech operations."""
+    def __init__(self, name, description, value, tech_type="generic"):
         super().__init__(name, description, value)
         self.tech_type = tech_type
+        self.is_electronic = True
+        self.battery = 100  # Battery percentage
+        
+    def __str__(self):
+        return f"{self.name} (Tech type: {self.tech_type}, Battery: {self.battery}%)"
+        
+    def use_battery(self, amount):
+        """Use some battery power. Returns True if successful, False if not enough battery."""
+        if self.battery >= amount:
+            self.battery -= amount
+            return True
+        return False
+        
+    def recharge(self, amount=100):
+        """Recharge the battery by the specified amount."""
+        self.battery = min(100, self.battery + amount)
+        return f"{self.name} recharged to {self.battery}%."
 
 
 class USBStick(TechItem):
@@ -294,34 +319,131 @@ class USBStick(TechItem):
 
 
 class Drone(TechItem):
-    def __init__(self, name, description, value, tech_type):
-        super().__init__(name, description,value, tech_type="Drone")
-        # want to add ability to fly around and distract NPCs, maybe drop distraction items and hazards like grenades
-        # unlimited battery life for now but might want to add charging later
-        self.battery_life = 100
-        self.is_flying = False
-        # abilities will include distracting, dropping items, hacking, including hacking soil and plants
-        # if hackable item is in the soil, it will hack the soil and produce a plant with special effects
-
+    """A small drone that can be used for surveillance and hacking."""
+    def __init__(self, name="Hacking Drone", description="A small drone equipped with hacking tools and a camera.", value=150):
+        super().__init__(name, description, value, tech_type="Drone")
+        self.is_deployed = False
+        self.target = None
+        self.cooldown = 0
+        self.available_targets = []
+        
     def __str__(self):
-        return f"{self.name}: A drone, useful for surveillance and sabotage. (Battery Life: {self.battery_life})"
+        status = "Deployed" if self.is_deployed else "Ready"
+        return f"{self.name} ({status}, Battery: {self.battery}%)"
+        
     def use(self, player, game):
-        """Use the drone to spy and distract NPCs."""
-
-        messages = []
-        messages.append(f"You deploy the {self.name}!")
-        messages.append("The drone takes off and starts flying around.")
-        
-        # Check if there are NPCs in the area to distract
-        if player.current_area and player.current_area.npcs:
-            # Get a list of alive NPCs
-            alive_npcs = [npc for npc in player.current_area.npcs if hasattr(npc, 'is_alive') and npc.is_alive]
+        """Deploy the drone or recall it if already deployed."""
+        if self.cooldown > 0:
+            return False, f"The {self.name} is still cooling down. {self.cooldown} turns remaining."
             
-            if alive_npcs:
-                # Randomly distract some NPCs
-                distracted_npcs = random.sample(alive_npcs, min(3, len(alive_npcs)))
-                for npc in distracted_npcs:
-                    npc.is_distracted = True
-                messages.append("The drone emits a loud noise, drawing attention!")
+        if not self.use_battery(10):
+            return False, f"The {self.name} doesn't have enough battery power."
+            
+        if self.is_deployed:
+            self.is_deployed = False
+            self.target = None
+            self.cooldown = 2  # Set cooldown after recalling
+            return True, f"You recall the {self.name}."
+        else:
+            self.is_deployed = True
+            return True, self._deploy_drone(player, game)
+            
+    def _deploy_drone(self, player, game):
+        """Deploy the drone and show available targets."""
+        messages = []
+        messages.append(f"You deploy the {self.name}.")
+        messages.append("The drone hovers silently, awaiting your commands.")
         
-        return True, "\n".join(messages)
+        # Check for potential targets in the area
+        gang_members = [npc for npc in player.current_area.npcs 
+                       if hasattr(npc, 'gang') and npc.is_alive]
+                       
+        if not gang_members:
+            messages.append("There are no suitable targets for hacking in this area.")
+            return "\n".join(messages)
+            
+        # List potential targets
+        messages.append("\nPotential targets detected:")
+        for i, npc in enumerate(gang_members, 1):
+            messages.append(f"{i}. {npc.name} ({npc.gang.name})")
+            
+        messages.append("\nUse 'hack [target number]' to hack a target's phone.")
+        
+        # Store targets for later reference
+        self.available_targets = gang_members
+        
+        return "\n".join(messages)
+        
+    def hack_target(self, target_index, player, game):
+        """Hack a target's phone to trigger events."""
+        if not self.is_deployed:
+            return False, "The drone is not deployed."
+            
+        if not self.use_battery(20):
+            return False, "The drone doesn't have enough battery power."
+            
+        if not hasattr(self, 'available_targets') or not self.available_targets:
+            return False, "No targets available."
+            
+        try:
+            target_index = int(target_index) - 1
+            if target_index < 0 or target_index >= len(self.available_targets):
+                return False, "Invalid target number."
+                
+            target = self.available_targets[target_index]
+            self.target = target
+            
+            # Simulate hacking process
+            messages = []
+            messages.append(f"Hacking {target.name}'s phone...")
+            print(messages[-1])
+            time.sleep(1)
+            
+            messages.append("Bypassing security...")
+            print(messages[-1])
+            time.sleep(1)
+            
+            messages.append("Accessing messaging app...")
+            print(messages[-1])
+            time.sleep(1)
+            
+            # Find a rival gang
+            rival_gangs = [gang for gang_name, gang in game.gangs.items() 
+                          if gang.name != target.gang.name]
+                          
+            if not rival_gangs:
+                messages.append("Hack failed: No rival gangs available.")
+                return False, "\n".join(messages)
+                
+            rival_gang = random.choice(rival_gangs)
+            
+            # Send fake threatening message
+            messages.append(f"Sending threatening message to {rival_gang.name} members...")
+            print(messages[-1])
+            time.sleep(1)
+            
+            messages.append("Message sent! The rival gang should arrive soon.")
+            
+            # Set cooldown
+            self.cooldown = 5
+            
+            # Trigger the rival gang event
+            from random_events import RandomEventManager
+            event_manager = RandomEventManager(game)
+            event_result = event_manager.event_rival_gang_appears(target.gang, target, forced=True)
+            
+            if event_result:
+                messages.append(event_result)
+            
+            # Recall the drone
+            self.is_deployed = False
+            
+            return True, "\n".join(messages)
+            
+        except ValueError:
+            return False, "Invalid target number."
+            
+    def update(self):
+        """Update the drone state each turn."""
+        if self.cooldown > 0:
+            self.cooldown -= 1

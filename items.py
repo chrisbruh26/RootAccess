@@ -442,47 +442,58 @@ class Drone(TechItem):
         """Execute a specific type of hack on the target."""
         messages = []
         
-        # Check if hack type exists
-        if hack_type not in self.hack_types:
-            return False, f"Unknown hack type: {hack_type}"
+        try:
+            # Check if hack type exists
+            if hack_type not in self.hack_types:
+                return False, f"Unknown hack type: {hack_type}"
+                
+            hack_info = self.hack_types[hack_type]
             
-        hack_info = self.hack_types[hack_type]
-        
-        # Check battery
-        if not self.use_battery(hack_info["battery_cost"]):
-            return False, f"The drone doesn't have enough battery power. This hack requires {hack_info['battery_cost']}% battery."
+            # Check battery
+            if not self.use_battery(hack_info["battery_cost"]):
+                return False, f"The drone doesn't have enough battery power. This hack requires {hack_info['battery_cost']}% battery."
+                
+            # Simulate hacking process
+            messages.append(f"Executing {hack_info['name']} on {target.name}...")
+            print(messages[-1])
+            time.sleep(0.5)
             
-        # Simulate hacking process
-        messages.append(f"Executing {hack_info['name']} on {target.name}...")
-        print(messages[-1])
-        time.sleep(0.5)
-        
-        messages.append("Bypassing security...")
-        print(messages[-1])
-        time.sleep(0.5)
-        
-        # Execute the specific hack
-        if hack_type == "message" and hasattr(target, 'gang'):
-            result = self._execute_message_hack(target, game, messages)
-        elif hack_type == "confusion":
-            result = self._execute_confusion_hack(target, game, messages)
-        elif hack_type == "item":
-            result = self._execute_item_hack(target, game, messages)
-        elif hack_type == "behavior":
-            result = self._execute_behavior_hack(target, game, messages)
-        else:
-            messages.append("Hack failed: Incompatible target or hack type.")
+            messages.append("Bypassing security...")
+            print(messages[-1])
+            time.sleep(0.5)
+            
+            # Execute the specific hack
             result = False
             
-        # Set cooldown
-        self.cooldown = hack_info["cooldown"]
-        
-        # Recall the drone if hack was successful
-        if result:
-            self.is_deployed = False
-            messages.append(f"Hack complete. {self.name} returning to you.")
-        
-        return result, "\n".join(messages)
+            try:
+                if hack_type == "message" and hasattr(target, 'gang'):
+                    result = self._execute_message_hack(target, game, messages)
+                elif hack_type == "confusion":
+                    result = self._execute_confusion_hack(target, game, messages)
+                elif hack_type == "item":
+                    result = self._execute_item_hack(target, game, messages)
+                elif hack_type == "behavior":
+                    result = self._execute_behavior_hack(target, game, messages)
+                else:
+                    messages.append("Hack failed: Incompatible target or hack type.")
+                    result = False
+            except Exception as e:
+                messages.append(f"Hack failed: {str(e)}")
+                result = False
+                
+            # Set cooldown
+            self.cooldown = hack_info["cooldown"]
+            
+            # Recall the drone if hack was successful
+            if result:
+                self.is_deployed = False
+                messages.append(f"Hack complete. {self.name} returning to you.")
+            
+            return result, "\n".join(messages)
+            
+        except Exception as e:
+            # Catch any unexpected errors
+            return False, f"Hack failed due to an unexpected error: {str(e)}"
     
     def _execute_message_hack(self, target, game, messages):
         """Execute a fake message hack to cause gang conflicts."""
@@ -562,10 +573,16 @@ class Drone(TechItem):
         print(messages[-1])
         time.sleep(0.5)
         
-        # Check if target has items
-        if hasattr(target, 'inventory') and target.inventory:
-            # Choose a random item from the target's inventory
-            item = random.choice(target.inventory)
+        # Check if target has items - NPCs use 'items' attribute, not 'inventory'
+        target_items = []
+        if hasattr(target, 'items') and target.items:
+            target_items = target.items
+        elif hasattr(target, 'inventory') and target.inventory:
+            target_items = target.inventory
+            
+        if target_items:
+            # Choose a random item from the target's items
+            item = random.choice(target_items)
             
             # 50% chance to make them use the item, 50% to make them drop it
             if random.random() < 0.5 and hasattr(item, 'use'):
@@ -575,22 +592,60 @@ class Drone(TechItem):
                 
                 # Make the NPC use the item
                 if hasattr(item, 'use'):
-                    result = item.use(target, game)
-                    messages.append(f"{target.name} suddenly uses their {item.name}!")
-                    
-                    # If the item has effects, apply them
-                    if hasattr(item, 'effect') and hasattr(target, 'active_effects'):
-                        target.active_effects.append(item.effect)
-                        messages.append(f"{target.name} is affected by the {item.name}!")
+                    try:
+                        # Try to use the item - handle different parameter requirements
+                        if hasattr(item.use, '__code__') and 'game' in item.use.__code__.co_varnames:
+                            result = item.use(target, game)
+                        else:
+                            # Try with just the target first
+                            try:
+                                result = item.use(target)
+                            except TypeError:
+                                # If that fails, try with both target and game
+                                result = item.use(target, game)
+                            
+                        messages.append(f"{target.name} suddenly uses their {item.name}!")
+                        
+                        # If the item has effects, apply them
+                        if hasattr(item, 'effect'):
+                            # Add active_effects attribute if it doesn't exist
+                            if not hasattr(target, 'active_effects'):
+                                target.active_effects = []
+                            
+                            # Clone the effect to avoid sharing the same effect instance
+                            if hasattr(item.effect, '__class__'):
+                                from copy import deepcopy
+                                effect_copy = deepcopy(item.effect)
+                                target.active_effects.append(effect_copy)
+                            else:
+                                target.active_effects.append(item.effect)
+                                
+                            messages.append(f"{target.name} is affected by the {item.name}!")
+                    except Exception as e:
+                        # If there's an error using the item, provide a fallback message
+                        messages.append(f"{target.name} tries to use {item.name} but something goes wrong.")
             else:
                 messages.append(f"Sending 'drop item' command to {target.name}...")
                 print(messages[-1])
                 time.sleep(0.5)
                 
                 # Make the NPC drop the item
-                target.inventory.remove(item)
-                target.current_area.add_item(item)
-                messages.append(f"{target.name} suddenly drops their {item.name}!")
+                if hasattr(target, 'items'):
+                    target.items.remove(item)
+                elif hasattr(target, 'inventory'):
+                    target.inventory.remove(item)
+                    
+                # Add the item to the area - NPCs use 'location' attribute
+                if hasattr(target, 'location') and target.location is not None:
+                    if hasattr(target.location, 'add_item'):
+                        target.location.add_item(item)
+                    elif hasattr(target.location, 'items'):
+                        # Fallback if add_item method doesn't exist
+                        target.location.items.append(item)
+                    messages.append(f"{target.name} suddenly drops their {item.name}!")
+                else:
+                    # If we can't determine the location, just remove the item
+                    messages.append(f"{target.name} suddenly loses their {item.name}!")
                 
             return True
         else:
@@ -599,23 +654,37 @@ class Drone(TechItem):
     
     def _execute_behavior_hack(self, target, game, messages):
         """Execute a behavior hack to temporarily change the target's behavior."""
-        messages.append("Accessing behavioral subroutines...")
-        print(messages[-1])
-        time.sleep(0.5)
-        
-        messages.append("Overriding decision matrix...")
-        print(messages[-1])
-        time.sleep(0.5)
-        
-        # Check if target has behavior settings
-        if hasattr(target, 'behavior_type'):
+        try:
+            messages.append("Accessing behavioral subroutines...")
+            print(messages[-1])
+            time.sleep(0.5)
+            
+            messages.append("Overriding decision matrix...")
+            print(messages[-1])
+            time.sleep(0.5)
+            
+            # Import BehaviorType
             from npc_behavior import BehaviorType
+            
+            # Check if target has behavior settings or add them
+            if not hasattr(target, 'behavior_type'):
+                # If NPC doesn't have a behavior type, assign a default one
+                target.behavior_type = BehaviorType.IDLE
+                messages.append(f"Installing behavior module in {target.name}...")
+                print(messages[-1])
+                time.sleep(0.5)
             
             # Store original behavior
             original_behavior = target.behavior_type
             
             # Choose a random new behavior that's different from the current one
-            available_behaviors = [b for b in BehaviorType if b != original_behavior]
+            available_behaviors = [BehaviorType.IDLE, BehaviorType.TALK, BehaviorType.FIGHT, 
+                                  BehaviorType.USE_ITEM, BehaviorType.TECH, BehaviorType.SUSPICIOUS]
+            
+            # Remove current behavior from options
+            if original_behavior in available_behaviors:
+                available_behaviors.remove(original_behavior)
+            
             new_behavior = random.choice(available_behaviors)
             
             # Apply the new behavior
@@ -627,15 +696,31 @@ class Drone(TechItem):
             target.behavior_override_timer = 5
             target.original_behavior = original_behavior
             
-            messages.append(f"{target.name}'s behavior has been changed to {new_behavior.name}!")
+            # Get a readable name for the behavior
+            behavior_names = {
+                BehaviorType.IDLE: "Idle",
+                BehaviorType.TALK: "Talkative",
+                BehaviorType.FIGHT: "Aggressive",
+                BehaviorType.USE_ITEM: "Item User",
+                BehaviorType.GARDENING: "Gardener",
+                BehaviorType.TECH: "Tech Expert",
+                BehaviorType.SUSPICIOUS: "Suspicious"
+            }
+            
+            behavior_name = behavior_names.get(new_behavior, new_behavior)
+            messages.append(f"{target.name}'s behavior has been changed to {behavior_name}!")
             
             # Add a method to the target to revert behavior after timer expires
-            def update_behavior_override(self):
-                if hasattr(self, 'behavior_override_timer') and self.behavior_override_timer > 0:
-                    self.behavior_override_timer -= 1
-                    if self.behavior_override_timer == 0 and hasattr(self, 'original_behavior'):
-                        self.behavior_type = self.original_behavior
-                        delattr(self, 'original_behavior')
+            def update_behavior_override(self_target):
+                try:
+                    if hasattr(self_target, 'behavior_override_timer') and self_target.behavior_override_timer > 0:
+                        self_target.behavior_override_timer -= 1
+                        if self_target.behavior_override_timer == 0 and hasattr(self_target, 'original_behavior'):
+                            self_target.behavior_type = self_target.original_behavior
+                            delattr(self_target, 'original_behavior')
+                except Exception:
+                    # Silently fail if there's an error in the update
+                    pass
             
             # Add the method to the target if it doesn't already have it
             if not hasattr(target, 'update_behavior_override'):
@@ -645,14 +730,24 @@ class Drone(TechItem):
                 original_update = target.update if hasattr(target, 'update') else lambda self, game: None
                 
                 def new_update(self, game):
-                    original_update(self, game)
-                    self.update_behavior_override()
+                    try:
+                        original_update(self, game)
+                        self.update_behavior_override()
+                    except Exception:
+                        # Silently fail if there's an error in the update
+                        pass
                 
                 target.update = new_update.__get__(target)
-            
+                
+            # Add active_effects attribute if it doesn't exist
+            if not hasattr(target, 'active_effects'):
+                target.active_effects = []
+                
             return True
-        else:
-            messages.append("Hack failed: Target's behavior cannot be modified.")
+            
+        except Exception as e:
+            # If anything goes wrong, provide a fallback message
+            messages.append(f"Hack attempt failed: {str(e)}")
             return False
     
     def update(self):

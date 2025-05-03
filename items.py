@@ -291,3 +291,37 @@ class USBStick(TechItem):
         # make the soil produce a plant with special effects
 
         # cause the soil to produce a plant with effects based on the data on the USB stick
+
+
+class Drone(TechItem):
+    def __init__(self, name, description, value, tech_type):
+        super().__init__(name, description,value, tech_type="Drone")
+        # want to add ability to fly around and distract NPCs, maybe drop distraction items and hazards like grenades
+        # unlimited battery life for now but might want to add charging later
+        self.battery_life = 100
+        self.is_flying = False
+        # abilities will include distracting, dropping items, hacking, including hacking soil and plants
+        # if hackable item is in the soil, it will hack the soil and produce a plant with special effects
+
+    def __str__(self):
+        return f"{self.name}: A drone, useful for surveillance and sabotage. (Battery Life: {self.battery_life})"
+    def use(self, player, game):
+        """Use the drone to spy and distract NPCs."""
+
+        messages = []
+        messages.append(f"You deploy the {self.name}!")
+        messages.append("The drone takes off and starts flying around.")
+        
+        # Check if there are NPCs in the area to distract
+        if player.current_area and player.current_area.npcs:
+            # Get a list of alive NPCs
+            alive_npcs = [npc for npc in player.current_area.npcs if hasattr(npc, 'is_alive') and npc.is_alive]
+            
+            if alive_npcs:
+                # Randomly distract some NPCs
+                distracted_npcs = random.sample(alive_npcs, min(3, len(alive_npcs)))
+                for npc in distracted_npcs:
+                    npc.is_distracted = True
+                messages.append("The drone emits a loud noise, drawing attention!")
+        
+        return True, "\n".join(messages)

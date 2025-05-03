@@ -466,11 +466,11 @@ class NPCBehaviorCoordinator:
                     
             # If player is detected, chance to attack
             if hasattr(game.player, 'detected_by') and npc.gang in game.player.detected_by:
-                if random.random() < 0.7:  # 70% chance to attack if detected
+                if random.random() < 0.9:  # 90% chance to attack if detected
                     return npc.attack_player(game.player)
                     
             # Chance to attack other gang members
-            if random.random() < 0.2:  # 20% chance to check for enemies
+            if random.random() < 0.4:  # 40% chance to check for enemies
                 # Find other gang members in the same area
                 other_gang_members = [other for other in npc.location.npcs 
                                      if isinstance(other, GangMember) 
@@ -491,8 +491,8 @@ class NPCBehaviorCoordinator:
             npc.add_item(item)
             return f"{npc.name} picks up {item.name}."
         
-        # Chance to use an item from inventory (30% chance)
-        if hasattr(npc, 'items') and npc.items and random.random() < 0.3:
+        # Chance to use an item from inventory (60% chance)
+        if hasattr(npc, 'items') and npc.items and random.random() < 0.6:
             item = random.choice(npc.items)
             
             # If it's a seed, try to plant it
@@ -542,8 +542,8 @@ class NPCBehaviorCoordinator:
                     elif random.random() < 0.3:  # 30% chance to threaten
                         return f"{npc.name} threatens {target.name} with {item.name}!"
             
-            # If it's an effect item, use it on other NPCs
-            if hasattr(item, 'effect'):
+            # If it's an effect item, use it on other NPCs (high priority)
+            if hasattr(item, 'effect') and random.random() < 0.8:  # 80% chance to prioritize effect items
                 affected_npcs = []
                 
                 # Apply effect to other NPCs in the area

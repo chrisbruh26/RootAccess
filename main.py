@@ -25,6 +25,7 @@ class Game:
         self.gangs = {}
         self.npc_coordinator = NPCBehaviorCoordinator()
         self.running = True
+        self.event_manager = None  # Will be initialized after game is fully set up
         
         # Weapon targeting system
         self.targeting_weapon = None
@@ -78,6 +79,7 @@ class Game:
             # Tech commands
             'hack': {'handler': self.cmd_hack, 'category': 'tech'},
             'run': {'handler': self.cmd_run_program, 'category': 'tech'},
+            'recharge': {'handler': self.cmd_recharge, 'category': 'tech'},
             
             # System commands
             'help': {'handler': self.cmd_help, 'category': 'system'},
@@ -578,9 +580,79 @@ class Game:
             return "There are no hiding spots in this area."
 
     def cmd_hack(self, args):
-        """Hack a computer."""
+        """Hack a computer or use a drone to hack an NPC.
+        
+        Usage:
+        - 'hack' - Hack a computer in the current area
+        - 'hack drone' - Deploy a hacking drone if you have one
+        - 'hack [number]' - When drone is deployed, hack the NPC with the corresponding number
+        - 'hack [number] [hack_type]' - Execute a specific hack type on the target
+        
+        Available hack types:
+        - message: Send fake threatening messages to rival gangs
+        - confusion: Hack target's device to cause confusion
+        - item: Make the target drop or use an item
+        - behavior: Temporarily change the target's behavior
+        """
+        # Check if args are provided
+        if args:
+            # Check if the player wants to use a drone
+            if args[0].lower() == 'drone':
+                # Find a drone in the player's inventory
+                drone = next((item for item in self.player.inventory if item.__class__.__name__ == 'Drone'), None)
+                if not drone:
+                    return "You don't have a drone in your inventory."
+                
+                # Use the drone
+                result = drone.use(self.player, self)
+                if result[0]:
+                    self.update_turn()
+                return result[1]
+            
+            # Check if the player is trying to hack a specific target with a deployed drone
+            try:
+                target_index = int(args[0])
+                # Find a deployed drone in the player's inventory
+                drone = next((item for item in self.player.inventory 
+                             if item.__class__.__name__ == 'Drone' and item.is_deployed), None)
+                if not drone:
+                    return "You need to deploy a drone first with 'hack drone'."
+                
+                # Check if a specific hack type was provided
+                if len(args) > 1:
+                    hack_type = args[1].lower()
+                    
+                    # Check if the hack type is valid
+                    if not hasattr(drone, 'hack_types') or hack_type not in drone.hack_types:
+                        valid_types = list(drone.hack_types.keys()) if hasattr(drone, 'hack_types') else []
+                        return f"Invalid hack type. Available types: {', '.join(valid_types)}"
+                    
+                    # Get the target
+                    if not hasattr(drone, 'available_targets') or len(drone.available_targets) < target_index:
+                        return "Invalid target number."
+                    
+                    target = drone.available_targets[target_index - 1]
+                    
+                    # Execute the specific hack
+                    result = drone._execute_hack(target, hack_type, self.player, self)
+                else:
+                    # No specific hack type, use the default hack_target method
+                    result = drone.hack_target(target_index, self.player, self)
+                
+                if result[0]:
+                    self.update_turn()
+                return result[1]
+            except ValueError:
+                # Not a number, so not trying to hack a specific target
+                return "Invalid hack command. Use 'hack', 'hack drone', or 'hack [number] [hack_type]'."
+        
+        # No args, try to hack a computer in the area
         computer = next((obj for obj in self.player.current_area.objects if isinstance(obj, Computer)), None)
         if not computer:
+            # No computer found, check if player has a drone they could use
+            drone = next((item for item in self.player.inventory if item.__class__.__name__ == 'Drone'), None)
+            if drone:
+                return "There's no computer here to hack. Try 'hack drone' to deploy your drone."
             return "There's no computer here to hack."
         
         result = computer.hack(self.player)
@@ -647,7 +719,41 @@ class Game:
     def cmd_quit(self, args):
         """Exit the game."""
         self.running = False
-        return "Thanks for playing!"
+        
+    def cmd_recharge(self, args):
+        """Recharge tech items like drones.
+        
+        Usage:
+        - 'recharge' - Recharge all tech items in your inventory
+        - 'recharge [item name]' - Recharge a specific tech item
+        """
+        # Find all tech items in the player's inventory
+        tech_items = [item for item in self.player.inventory 
+                     if hasattr(item, 'is_electronic') and item.is_electronic]
+        
+        if not tech_items:
+            return "You don't have any electronic devices to recharge."
+        
+        # If an item name is specified, try to recharge that specific item
+        if args:
+            item_name = " ".join(args).lower()
+            item = next((item for item in tech_items if item.name.lower() == item_name), None)
+            
+            if not item:
+                return f"You don't have a '{item_name}' to recharge."
+            
+            # Recharge the item
+            result = item.recharge()
+            self.update_turn()
+            return result
+        
+        # Recharge all tech items
+        messages = []
+        for item in tech_items:
+            messages.append(item.recharge())
+        
+        self.update_turn()
+        return "\n".join(messages)
         
     def cmd_break(self, args):
         """Break or smash objects. Usage: break [object] with [weapon] or break [object]"""
@@ -704,9 +810,14 @@ class Game:
         if expired_effects:
             print(f"Effects expired: {', '.join(expired_effects)}")
         
+        # Update drone cooldowns
+        for item in self.player.inventory:
+            if isinstance(item, Drone) and hasattr(item, 'update'):
+                item.update()
+        
         # Check for random events (10% chance per turn)
-        if random.random() < 0.1:
-            self.trigger_random_event()
+        if random.random() < 0.1 and self.event_manager:
+            self.event_manager.trigger_random_event()
         
         # Process NPC behaviors in the current area
         npc_messages = self.npc_coordinator.process_npc_behaviors(self, self.player.current_area.npcs)
@@ -722,19 +833,7 @@ class Game:
             print(npc_summary)
             print()
         
-    def trigger_random_event(self):
-        """Trigger a random event in the current area."""
-        # List of possible random events
-        events = [
-            self.event_rival_gang_appears,
-            self.event_tech_malfunction,
-            self.event_plant_mutation,
-            self.event_mass_confusion
-        ]
-        
-        # Choose and trigger a random event
-        event = random.choice(events)
-        event()
+    # Random events have been moved to random_events.py
         
     def event_rival_gang_appears(self):
         """Random event: A rival gang appears and starts a fight."""
@@ -1002,6 +1101,9 @@ class Game:
         print("Welcome to Root Access!")
         self.create_player()
         self.create_world()
+        
+        # Initialize the event manager after the world is created
+        self.event_manager = RandomEventManager(self)
         
         print(self.player.current_area.get_full_description())
         

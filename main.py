@@ -3,7 +3,7 @@ import os
 import json
 
 # Import game modules
-from items import Item, Weapon, Consumable, EffectItem, SmokeBomb, Decoy
+from items import Item, Weapon, Consumable, EffectItem, SmokeBomb, Decoy, Drone
 from objects import VendingMachine
 from gardening import Seed, Plant, SoilPlot, WateringCan
 from effects import Effect, PlantEffect, SupervisionEffect, HackedPlantEffect, Substance, HackedMilk, HallucinationEffect, ConfusionEffect
@@ -11,6 +11,7 @@ from npc_behavior import NPC, Civilian, Gang, GangMember, BehaviorType, Behavior
 from objects import Computer, HidingSpot
 from player import Player
 from area import Area
+from random_events import RandomEventManager
 
 # ----------------------------- #
 # GAME MANAGEMENT               #
@@ -173,6 +174,8 @@ class Game:
         confusion_ray = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, ConfusionEffect())
         self.areas["alley"].add_item(confusion_ray)
         self.areas["Home"].add_item(hacked_milk_blaster)
+        self.areas["Home"].add_item(Drone())
+
 
 
         # WHEN ADDING EFFECTS TO ITEMS LIKE CROPS: example_crop.add_effect(ExampleEffect())

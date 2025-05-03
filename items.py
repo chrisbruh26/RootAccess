@@ -326,6 +326,32 @@ class Drone(TechItem):
         self.target = None
         self.cooldown = 0
         self.available_targets = []
+        self.hack_types = {
+            "message": {
+                "name": "Fake Message Hack",
+                "description": "Send fake threatening messages to rival gangs",
+                "battery_cost": 20,
+                "cooldown": 5
+            },
+            "confusion": {
+                "name": "Confusion Hack",
+                "description": "Hack target's device to cause confusion",
+                "battery_cost": 15,
+                "cooldown": 3
+            },
+            "item": {
+                "name": "Item Manipulation Hack",
+                "description": "Make the target drop or use an item",
+                "battery_cost": 25,
+                "cooldown": 4
+            },
+            "behavior": {
+                "name": "Behavior Override Hack",
+                "description": "Temporarily change the target's behavior",
+                "battery_cost": 30,
+                "cooldown": 6
+            }
+        }
         
     def __str__(self):
         status = "Deployed" if self.is_deployed else "Ready"
@@ -342,7 +368,7 @@ class Drone(TechItem):
         if self.is_deployed:
             self.is_deployed = False
             self.target = None
-            self.cooldown = 2  # Set cooldown after recalling
+            self.cooldown = 0  # Set cooldown after recalling, don't want any cooldown so 0 for now
             return True, f"You recall the {self.name}."
         else:
             self.is_deployed = True
@@ -354,33 +380,33 @@ class Drone(TechItem):
         messages.append(f"You deploy the {self.name}.")
         messages.append("The drone hovers silently, awaiting your commands.")
         
-        # Check for potential targets in the area
-        gang_members = [npc for npc in player.current_area.npcs 
-                       if hasattr(npc, 'gang') and npc.is_alive]
+        # Check for potential targets in the area - now includes all NPCs, not just gang members
+        potential_targets = [npc for npc in player.current_area.npcs if npc.is_alive]
                        
-        if not gang_members:
+        if not potential_targets:
             messages.append("There are no suitable targets for hacking in this area.")
             return "\n".join(messages)
             
         # List potential targets
         messages.append("\nPotential targets detected:")
-        for i, npc in enumerate(gang_members, 1):
-            messages.append(f"{i}. {npc.name} ({npc.gang.name})")
+        for i, npc in enumerate(potential_targets, 1):
+            # Show gang affiliation if applicable
+            if hasattr(npc, 'gang'):
+                messages.append(f"{i}. {npc.name} ({npc.gang.name})")
+            else:
+                messages.append(f"{i}. {npc.name} (Civilian)")
             
-        messages.append("\nUse 'hack [target number]' to hack a target's phone.")
+        messages.append("\nUse 'hack [target number]' to hack a target.")
         
         # Store targets for later reference
-        self.available_targets = gang_members
+        self.available_targets = potential_targets
         
         return "\n".join(messages)
         
     def hack_target(self, target_index, player, game):
-        """Hack a target's phone to trigger events."""
+        """Hack a target to trigger various effects."""
         if not self.is_deployed:
             return False, "The drone is not deployed."
-            
-        if not self.use_battery(20):
-            return False, "The drone doesn't have enough battery power."
             
         if not hasattr(self, 'available_targets') or not self.available_targets:
             return False, "No targets available."
@@ -393,56 +419,242 @@ class Drone(TechItem):
             target = self.available_targets[target_index]
             self.target = target
             
-            # Simulate hacking process
+            # Show available hack types
             messages = []
-            messages.append(f"Hacking {target.name}'s phone...")
-            print(messages[-1])
-            time.sleep(1)
+            messages.append(f"Target locked: {target.name}")
+            messages.append("\nAvailable hacks:")
             
-            messages.append("Bypassing security...")
-            print(messages[-1])
-            time.sleep(1)
+            for hack_id, hack_info in self.hack_types.items():
+                messages.append(f"- {hack_id}: {hack_info['name']} - {hack_info['description']} (Battery: {hack_info['battery_cost']}%)")
             
-            messages.append("Accessing messaging app...")
-            print(messages[-1])
-            time.sleep(1)
+            messages.append("\nType 'hack [target number] [hack type]' to execute a specific hack.")
+            messages.append("Example: 'hack 1 message' or 'hack 1 confusion'")
             
-            # Find a rival gang
-            rival_gangs = [gang for gang_name, gang in game.gangs.items() 
-                          if gang.name != target.gang.name]
-                          
-            if not rival_gangs:
-                messages.append("Hack failed: No rival gangs available.")
-                return False, "\n".join(messages)
-                
-            rival_gang = random.choice(rival_gangs)
+            # Show available hack options and let the main command handler deal with specific hack types
             
-            # Send fake threatening message
-            messages.append(f"Sending threatening message to {rival_gang.name} members...")
-            print(messages[-1])
-            time.sleep(1)
-            
-            messages.append("Message sent! The rival gang should arrive soon.")
-            
-            # Set cooldown
-            self.cooldown = 5
-            
-            # Trigger the rival gang event
-            from random_events import RandomEventManager
-            event_manager = RandomEventManager(game)
-            event_result = event_manager.event_rival_gang_appears(target.gang, target, forced=True)
-            
-            if event_result:
-                messages.append(event_result)
-            
-            # Recall the drone
-            self.is_deployed = False
-            
+            # Show available hack options
             return True, "\n".join(messages)
             
         except ValueError:
             return False, "Invalid target number."
+    
+    def _execute_hack(self, target, hack_type, player, game):
+        """Execute a specific type of hack on the target."""
+        messages = []
+        
+        # Check if hack type exists
+        if hack_type not in self.hack_types:
+            return False, f"Unknown hack type: {hack_type}"
             
+        hack_info = self.hack_types[hack_type]
+        
+        # Check battery
+        if not self.use_battery(hack_info["battery_cost"]):
+            return False, f"The drone doesn't have enough battery power. This hack requires {hack_info['battery_cost']}% battery."
+            
+        # Simulate hacking process
+        messages.append(f"Executing {hack_info['name']} on {target.name}...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        messages.append("Bypassing security...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        # Execute the specific hack
+        if hack_type == "message" and hasattr(target, 'gang'):
+            result = self._execute_message_hack(target, game, messages)
+        elif hack_type == "confusion":
+            result = self._execute_confusion_hack(target, game, messages)
+        elif hack_type == "item":
+            result = self._execute_item_hack(target, game, messages)
+        elif hack_type == "behavior":
+            result = self._execute_behavior_hack(target, game, messages)
+        else:
+            messages.append("Hack failed: Incompatible target or hack type.")
+            result = False
+            
+        # Set cooldown
+        self.cooldown = hack_info["cooldown"]
+        
+        # Recall the drone if hack was successful
+        if result:
+            self.is_deployed = False
+            messages.append(f"Hack complete. {self.name} returning to you.")
+        
+        return result, "\n".join(messages)
+    
+    def _execute_message_hack(self, target, game, messages):
+        """Execute a fake message hack to cause gang conflicts."""
+        if not hasattr(target, 'gang'):
+            messages.append("Hack failed: Target is not a gang member.")
+            return False
+            
+        messages.append("Accessing messaging app...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        # Find a rival gang
+        rival_gangs = [gang for gang_name, gang in game.gangs.items() 
+                      if gang.name != target.gang.name]
+                      
+        if not rival_gangs:
+            messages.append("Hack failed: No rival gangs available.")
+            return False
+            
+        rival_gang = random.choice(rival_gangs)
+        
+        # Send fake threatening message
+        messages.append(f"Sending threatening message to {rival_gang.name} members...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        messages.append("Message sent! The rival gang should arrive soon.")
+        
+        # Trigger the rival gang event
+        from random_events import RandomEventManager
+        event_manager = RandomEventManager(game)
+        event_result = event_manager.event_rival_gang_appears(target.gang, target, forced=True)
+        
+        if event_result:
+            messages.append(event_result)
+        
+        return True
+    
+    def _execute_confusion_hack(self, target, game, messages):
+        """Execute a confusion hack to disorient the target."""
+        messages.append("Accessing device settings...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        messages.append("Overriding sensory inputs...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        # Apply confusion effect to the target
+        if hasattr(target, 'active_effects'):
+            from effects import ConfusionEffect
+            confusion = ConfusionEffect()
+            confusion.duration = 3  # Lasts for 3 turns
+            confusion.remaining_turns = 3
+            target.active_effects.append(confusion)
+            
+            # Add effect messages to the NPC coordinator
+            if game and game.npc_coordinator:
+                game.npc_coordinator.add_effect_messages([target], confusion)
+                
+            messages.append(f"{target.name} is now confused and disoriented!")
+            
+            # If target is a gang member, they might lose track of the player
+            if hasattr(target, 'has_detected_player'):
+                target.has_detected_player = False
+                target.detection_cooldown = 3
+                messages.append(f"{target.name} has lost track of you.")
+                
+            return True
+        else:
+            messages.append("Hack failed: Target cannot be affected by confusion.")
+            return False
+    
+    def _execute_item_hack(self, target, game, messages):
+        """Execute an item hack to make the target use or drop an item."""
+        messages.append("Accessing neural interface...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        # Check if target has items
+        if hasattr(target, 'inventory') and target.inventory:
+            # Choose a random item from the target's inventory
+            item = random.choice(target.inventory)
+            
+            # 50% chance to make them use the item, 50% to make them drop it
+            if random.random() < 0.5 and hasattr(item, 'use'):
+                messages.append(f"Sending 'use item' command to {target.name}...")
+                print(messages[-1])
+                time.sleep(0.5)
+                
+                # Make the NPC use the item
+                if hasattr(item, 'use'):
+                    result = item.use(target, game)
+                    messages.append(f"{target.name} suddenly uses their {item.name}!")
+                    
+                    # If the item has effects, apply them
+                    if hasattr(item, 'effect') and hasattr(target, 'active_effects'):
+                        target.active_effects.append(item.effect)
+                        messages.append(f"{target.name} is affected by the {item.name}!")
+            else:
+                messages.append(f"Sending 'drop item' command to {target.name}...")
+                print(messages[-1])
+                time.sleep(0.5)
+                
+                # Make the NPC drop the item
+                target.inventory.remove(item)
+                target.current_area.add_item(item)
+                messages.append(f"{target.name} suddenly drops their {item.name}!")
+                
+            return True
+        else:
+            messages.append("Hack failed: Target has no items to manipulate.")
+            return False
+    
+    def _execute_behavior_hack(self, target, game, messages):
+        """Execute a behavior hack to temporarily change the target's behavior."""
+        messages.append("Accessing behavioral subroutines...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        messages.append("Overriding decision matrix...")
+        print(messages[-1])
+        time.sleep(0.5)
+        
+        # Check if target has behavior settings
+        if hasattr(target, 'behavior_type'):
+            from npc_behavior import BehaviorType
+            
+            # Store original behavior
+            original_behavior = target.behavior_type
+            
+            # Choose a random new behavior that's different from the current one
+            available_behaviors = [b for b in BehaviorType if b != original_behavior]
+            new_behavior = random.choice(available_behaviors)
+            
+            # Apply the new behavior
+            target.behavior_type = new_behavior
+            
+            # Set a timer to revert back (5 turns)
+            if not hasattr(target, 'behavior_override_timer'):
+                target.behavior_override_timer = 0
+            target.behavior_override_timer = 5
+            target.original_behavior = original_behavior
+            
+            messages.append(f"{target.name}'s behavior has been changed to {new_behavior.name}!")
+            
+            # Add a method to the target to revert behavior after timer expires
+            def update_behavior_override(self):
+                if hasattr(self, 'behavior_override_timer') and self.behavior_override_timer > 0:
+                    self.behavior_override_timer -= 1
+                    if self.behavior_override_timer == 0 and hasattr(self, 'original_behavior'):
+                        self.behavior_type = self.original_behavior
+                        delattr(self, 'original_behavior')
+            
+            # Add the method to the target if it doesn't already have it
+            if not hasattr(target, 'update_behavior_override'):
+                target.update_behavior_override = update_behavior_override.__get__(target)
+                
+                # Monkey patch the target's update method to call our new method
+                original_update = target.update if hasattr(target, 'update') else lambda self, game: None
+                
+                def new_update(self, game):
+                    original_update(self, game)
+                    self.update_behavior_override()
+                
+                target.update = new_update.__get__(target)
+            
+            return True
+        else:
+            messages.append("Hack failed: Target's behavior cannot be modified.")
+            return False
+    
     def update(self):
         """Update the drone state each turn."""
         if self.cooldown > 0:

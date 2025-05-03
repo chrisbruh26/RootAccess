@@ -829,8 +829,66 @@ class Game:
             if self.player.hidden:
                 print("\n[STEALTH MODE ACTIVE]")
             
-            print("\nNPC ACTIONS:")
-            print(npc_summary)
+            print("\n===== NPC ACTIONS =====")
+            
+            # Check if there are combat actions to display separately
+            combat_keywords = [
+                "attack", "damage", "defeat", "fight", "hostile", "punch", 
+                "kick", "shoot", "stab", "hit", "battle", "combat", "weapon",
+                "threatens", "ambush", "retaliate", "defend", "drag"
+            ]
+            
+            has_combat = any(keyword in npc_summary.lower() for keyword in combat_keywords)
+            
+            if has_combat:
+                print("COMBAT:")
+                
+                # Extract and print combat-related sentences
+                # Split by both period and exclamation mark
+                sentences = []
+                current = ""
+                for char in npc_summary:
+                    current += char
+                    if char in ['.', '!'] and current.strip():
+                        sentences.append(current.strip())
+                        current = ""
+                
+                # Add any remaining text
+                if current.strip():
+                    sentences.append(current.strip())
+                
+                combat_sentences = []
+                other_sentences = []
+                
+                for sentence in sentences:
+                    # Clean up the sentence
+                    clean_sentence = sentence.strip()
+                    if not clean_sentence:
+                        continue
+                        
+                    # Make sure it ends with proper punctuation
+                    if not clean_sentence.endswith('.') and not clean_sentence.endswith('!'):
+                        clean_sentence += '.'
+                        
+                    # Categorize as combat or other
+                    if any(keyword in clean_sentence.lower() for keyword in combat_keywords):
+                        combat_sentences.append(clean_sentence)
+                    else:
+                        other_sentences.append(clean_sentence)
+                
+                # Print combat sentences
+                for sentence in combat_sentences:
+                    print(f"- {sentence}")
+                
+                # Print other actions if any
+                if other_sentences:
+                    print("\nOTHER ACTIONS:")
+                    for sentence in other_sentences:
+                        print(f"- {sentence}")
+            else:
+                # No combat, just print the summary
+                print(npc_summary)
+                
             print()
         
     # Random events have been moved to random_events.py

@@ -109,6 +109,118 @@ class Plant:
             base_str += f" [Effects: {effect_names}]"
             
         return base_str
+    
+        # -------------- #
+        # SPECIAL PLANTS #
+        # -------------- #
+class SpecialPlant(Plant):
+    """Base class for all special plants with unique behaviors."""
+    def __init__(self, name, music_preference, allergen_level):
+        super().__init__(name)
+        self.is_special = True
+        self.mood = "neutral"  # Mood of the plant
+        self.music_preference = music_preference  # Genre they like
+        self.allergen_level = allergen_level  # Severity of computer allergy effects
+
+    def react_to_music(self, genre):
+        """All special plants react to music."""
+        if genre == self.music_preference:
+            return f"{self.name} is thriving with {genre} music!"
+        else:
+            return f"{self.name} is uncomfortable with {genre} and mutates strangely."
+
+    def trigger_allergy(self, computer):
+        """All special plants have an effect on computers."""
+        return f"{computer} sneezes violently as {self.name} spreads allergens nearby!"
+    
+
+class SnatcherSprout(SpecialPlant):
+    """A mischievous plant that steals nearby items."""
+    def __init__(self, music_preference, allergen_level):
+        super().__init__("Snatcher Sprout", music_preference, allergen_level)
+
+    def steal_item(self, target_item, npc):
+        return f"{self.name} yanks {target_item} from {npc}! \"Give me back my wallet!\""
+    
+
+import random
+
+class QuantumCactus(SpecialPlant):
+    """A chaotic plant that teleports randomly."""
+    def __init__(self, music_preference, allergen_level):
+        super().__init__("Quantum Cactus", music_preference, allergen_level)
+
+    def teleport(self, location_list):
+        new_location = random.choice(location_list)
+        return f"{self.name} teleports to {new_location} unexpectedly!"
+
+from datetime import datetime
+
+class TikTokVine(SpecialPlant):
+    """A prophetic plant that announces the real-world time and commands NPCs."""
+    def __init__(self, music_preference, allergen_level):
+        super().__init__("TikTok Vine", music_preference, allergen_level)
+
+    def announce_time(self):
+        current_time = datetime.now().strftime("%I:%M %p on %A, %B %d, %Y")
+        return f"{self.name} says: \"The time is {current_time}. Follow the prophecy!\""
+
+import random
+
+class Chatterbush(SpecialPlant):
+    """A sentient plant that talks randomly."""
+    def __init__(self, music_preference, allergen_level):
+        super().__init__("Chatterbush", music_preference, allergen_level)
+        self.dialogue_pool = [
+            "Why do humans only grow one head? Weak genetics!",
+            "Plants invented photosynthesis before it was cool.",
+            "My roots heard a secret about the vending machine gang..."
+        ]
+
+    def talk(self):
+        return f"{self.name} whispers: \"{random.choice(self.dialogue_pool)}\""
+
+
+class BiohackerBloom(SpecialPlant):
+    """A plant designed to hack computers and force digital allergies."""
+    def __init__(self, music_preference, allergen_level):
+        super().__init__("Biohacker Bloom", music_preference, allergen_level)
+
+    def hack_computer(self, computer):
+        return f"{self.name} infects {computer}, causing data corruption and system sneezing!"
+
+            # --------------------------------- #
+            # INITIALIZE SPECIAL PLANTS EXAMPLE #
+            # --------------------------------- #
+'''
+
+snatcher = SnatcherSprout("Rock", 3)
+quantum = QuantumCactus("Metal", 4)
+tiktok = TikTokVine("Pop", 2)
+chatter = Chatterbush("Indie", 3)
+biohacker = BiohackerBloom("Synthwave", 5)
+
+# Example interactions
+print(snatcher.steal_item("USB stick", "NPC Bob"))
+print(quantum.teleport(["Garden", "Vending Machine Alley", "Underground Bunker"]))
+print(tiktok.announce_time())
+print(chatter.talk())
+print(biohacker.hack_computer("Mainframe PC"))
+print(tiktok.react_to_music("Rock"))  # Shows plant reacting negatively to genre mismatch
+
+
+
+
+
+
+
+
+'''
+
+            
+
+
+
 
 
 class SoilPlot:

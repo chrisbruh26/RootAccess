@@ -12,6 +12,7 @@ from objects import Computer, HidingSpot
 from player import Player
 from area import Area
 from random_events import RandomEventManager
+from world_builder import WorldBuilder
 
 # ----------------------------- #
 # GAME MANAGEMENT               #
@@ -90,186 +91,16 @@ class Game:
         self.player = Player()
         
     def create_world(self):
-        # Create areas
-        self.areas["Home"] = Area("Home", "Your secret base of operations. It's small but functional.")
-        self.areas["garden"] = Area("Garden", "A small garden area with fertile soil.")
-        self.areas["street"] = Area("Street", "A busy street with various shops and people.")
-        self.areas["alley"] = Area("Alley", "A dark alley between buildings.")
-        self.areas["plaza"] = Area("Plaza", "A large open plaza with a fountain in the center.")
-        self.areas["warehouse"] = Area("Warehouse", "An abandoned warehouse, taken over by the Bloodhounds.")
-        self.areas["construction"] = Area("Construction Site", "A construction site with various equipment and materials.")
+        """
+        Create the game world using the WorldBuilder.
+        This method delegates world creation to the WorldBuilder class.
+        """
+        # Create player first
+        self.create_player()
         
-        # Connect areas
-        self.areas["Home"].add_connection("north", self.areas["garden"])
-        self.areas["garden"].add_connection("south", self.areas["Home"])
-        self.areas["garden"].add_connection("east", self.areas["street"])
-        self.areas["street"].add_connection("west", self.areas["garden"])
-        self.areas["street"].add_connection("north", self.areas["plaza"])
-        self.areas["plaza"].add_connection("south", self.areas["street"])
-        self.areas["street"].add_connection("east", self.areas["alley"])
-        self.areas["alley"].add_connection("west", self.areas["street"])
-        self.areas["street"].add_connection("south", self.areas["warehouse"])
-        self.areas["warehouse"].add_connection("north", self.areas["street"])
-        self.areas["plaza"].add_connection("east", self.areas["construction"])
-        self.areas["construction"].add_connection("west", self.areas["plaza"])
-        
-        # Add objects to areas
-        soil_plot = SoilPlot()
-        self.areas["garden"].add_object(soil_plot)
-        self.areas["warehouse"].add_object(soil_plot)
-        
-        computer = Computer("Hacking Terminal", "A specialized terminal for hacking operations.")
-        computer.programs = ["data_miner", "security_override", "plant_hacker"]
-        self.areas["Home"].add_object(computer)
-        
-        # Add hiding spots to areas
-        closet = HidingSpot("Closet", "A small closet that you can hide in.", 0.8)
-        self.areas["Home"].add_object(closet)
-        
-        bushes = HidingSpot("Bushes", "Dense bushes that provide good cover.", 0.7)
-        self.areas["garden"].add_object(bushes)
-        
-        dumpster = HidingSpot("Dumpster", "A large dumpster you can hide behind.", 0.6)
-        self.areas["alley"].add_object(dumpster)
-        
-        fountain = HidingSpot("Fountain", "A large fountain with decorative elements to hide behind.", 0.5)
-        self.areas["plaza"].add_object(fountain)
-        
-        crates = HidingSpot("Crates", "Stacked crates that provide decent cover.", 0.6)
-        self.areas["warehouse"].add_object(crates)
-        
-        # Add construction containers as hiding spots
-        container1 = HidingSpot("Construction Container", "A large metal container used for storing construction materials.", 0.9)
-        container2 = HidingSpot("Equipment Shed", "A small shed for storing construction equipment.", 0.8)
-        container3 = HidingSpot("Cement Mixer", "A large cement mixer you can hide behind.", 0.7)
-        self.areas["warehouse"].add_object(container1)
-        self.areas["warehouse"].add_object(container2)
-        self.areas["warehouse"].add_object(container3)
-        
-        # Add items to areas
-        self.areas["Home"].add_item(Item("Backpack", "A sturdy backpack for carrying items.", 20))
-        self.areas["garden"].add_item(Seed("Tomato Seed", "A seed for growing tomatoes.", "tomato", 5))
-        self.areas["garden"].add_item(Seed("Potato Seed", "A seed for growing potatoes.", "potato", 5))
-        self.areas["street"].add_item(Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20))
-        self.areas["alley"].add_item(Weapon("Pipe", "A metal pipe that can be used as a weapon.", 15, 10))
-
-
-        vending_machine = VendingMachine("Vending Machine")
-
-        self.areas["warehouse"].add_object(vending_machine)
-
-
-        vending_machine.add_item(Consumable("Soda", "A refreshing soda.", 5, 10))
-        vending_machine.add_item(Consumable("Chips", "A bag of chips.", 5, 5))
-        vending_machine.add_item(Consumable("Candy Bar", "A chocolate candy bar.", 5, 15))
-        vending_machine.add_item(Consumable("Energy Drink", "A caffeinated beverage that restores health.", 10, 20))
-
-
-        
-        # create better weapons
-
-        # Hacked Milk Blaster - causes hallucinations
-        hacked_milk_blaster = EffectItem("Hacked Milk Blaster", "A strange device that sprays hacked milk.", 50, HallucinationEffect())
-        self.areas["warehouse"].add_item(hacked_milk_blaster)
-        
-        # Confusion Ray - causes confusion
-        confusion_ray = EffectItem("Confusion Ray", "A device that emits waves that confuse the target.", 60, ConfusionEffect())
-        self.areas["alley"].add_item(confusion_ray)
-        self.areas["Home"].add_item(hacked_milk_blaster)
-        self.areas["Home"].add_item(Drone())
-
-
-
-        # WHEN ADDING EFFECTS TO ITEMS LIKE CROPS: example_crop.add_effect(ExampleEffect())
-
-
-
-
-
-        # Create gangs
-        self.gangs["Crimson Vipers"] = Gang("Crimson Vipers")
-        self.gangs["Bloodhounds"] = Gang("Bloodhounds")
-
-        # add gang members to areas
-        
-
-
-        bloodhounds_names = ["Buck", "Bubbles", "Boop", "Noodle", "Flop", "Squirt", "Squeaky", "Gus-Gus", "Puddles", "Muffin", "Binky", "Beep-Beep"]
-        
-
-        # create crimson vipers names list
-        crimson_vipers_names = ["Vipoop", "Snakle", "Rattlesnop", "Pythirt", "Anaceaky", "Cobrus-brus", "Lizuddles", "Viperino", "Slitherpuff", "Hissypants", "Slinker", "Snakester"]
-        # choose random name to create a Crimson Vipers gang member
-        name = random.choice(crimson_vipers_names)
-        self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Crimson Vipers named {name}.", self.gangs["Crimson Vipers"]))
-
-
-
-
-
-        # add 5 NPCs from the bloodhounds_name list to the warehouse
-
-        gun = Weapon("Gun", "A standard firearm.", 50, 20)
-
-        watering_can = WateringCan("watering can")
-        self.player.add_item(watering_can)
-        self.areas["Home"].add_item(watering_can)
-
-        carrot_seed =Seed("Carrot Seed", "A seed for growing carrot.", "carrot", 5)
-
-
-        # add NPCs to the garden to observe how normal civillians interact with plants
-
-        civilian_names = ["Ben", "Bob", "Charl", "Muckle", "Beevo", "ZeFronk", "Grazey", "Honk", "Ivee", "Jork"]
-
-        name_variations = ["etti", "oodle", "op", "eeky", "-eep", "uffin", "bertmo", "athur", "ubble", "uck", "ington", "sworth", "thistle", "quibble", "fizzle", "whistle", "plume", "tumble", "whisk", "glimmer", "thrax", "gloop", "splunk", "dribble", "crunch", "splorp", "quack", "splat", "grizzle", "blorp", "kins", "muff", "snuff", "puff", "whiff", "bloop", "twizzle", "flibble", "squibble", "wobble", "izzle", "oodle", "bop", "snorp", "florp", "wump", "zorp", "plonk", "squee", "boop", "doodle", "ucklebuck", "shoop"]
-
-        for i in range(5):
-            name_start = random.choice(civilian_names)
-            name_end = random.choice(name_variations)
-            name = f"{name_start}{name_end}"
-            self.areas["garden"].add_npc(Civilian(name, f"A random civilian named {name}."))
-            self.areas["garden"].npcs[-1].add_item(watering_can)
-            self.areas["garden"].npcs[-1].add_item(carrot_seed)
-            self.areas["garden"].npcs[-1].add_item(hacked_milk_blaster)
-
-        for i in range(5):
-            name = random.choice(bloodhounds_names)
-            bloodhounds_names.remove(name)
-            self.areas["warehouse"].add_npc(GangMember(name, f"A member of the Bloodhounds named {name}.", self.gangs["Bloodhounds"]))
-            # add a gun to inventory of each gang member
-            self.areas["warehouse"].npcs[-1].add_item(gun)
-            self.areas["warehouse"].npcs[-1].add_item(watering_can)
-            self.areas["warehouse"].npcs[-1].add_item(confusion_ray)
-            self.areas["warehouse"].add_item(carrot_seed)
-
-
-        machine_gun = Weapon("Machine Gun", "A machine gun.", 100, 50)
-        smoke_bomb = SmokeBomb()
-        tech_decoy = Decoy()
-
-        self.player.add_item(machine_gun)
-        self.player.add_item(smoke_bomb)
-        self.player.add_item(tech_decoy)
-        
-        # Add smoke bombs and decoys to various areas for the player to find
-        self.areas["alley"].add_item(SmokeBomb())
-        self.areas["street"].add_item(SmokeBomb())
-        self.areas["warehouse"].add_item(Decoy())
-        self.areas["garden"].add_item(Decoy())
-        self.areas["Home"].add_item(carrot_seed)
-
-        self.areas["warehouse"].add_npc(Civilian("John", "A random guy."))
-
-
-
-
-
-        self.areas["garden"].add_npc(Civilian("Gardener", "A friendly gardener tending to the plants."))
-
-
-        # Set player's starting location
-        self.player.current_area = self.areas["Home"]
+        # Use the WorldBuilder to create the world
+        world_builder = WorldBuilder(self)
+        world_builder.build_world()
         
     def process_command(self, command):
         """Process a player command."""

@@ -1,0 +1,30 @@
+{
+  "Home": {
+    "name": "Home",
+    "description": "Your secret base of operations. It's small but functional."
+  },
+  "garden": {
+    "name": "Garden",
+    "description": "A small garden area with fertile soil."
+  },
+  "street": {
+    "name": "Street",
+    "description": "A busy street with various shops and people."
+  },
+  "alley": {
+    "name": "Alley",
+    "description": "A dark alley between buildings."
+  },
+  "plaza": {
+    "name": "Plaza",
+    "description": "A large open plaza with a fountain in the center."
+  },
+  "warehouse": {
+    "name": "Warehouse",
+    "description": "An abandoned warehouse, taken over by the Bloodhounds."
+  },
+  "construction": {
+    "name": "Construction Site",
+    "description": "A construction site with various equipment and materials."
+  }
+}

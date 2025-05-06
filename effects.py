@@ -1,167 +1,223 @@
+"""
+Effects module for Root Access game.
+This module defines various effects that can be applied to players and NPCs.
+"""
+
 import random
 
-# ----------------------------- #
-# EFFECTS SYSTEM                #
-# ----------------------------- #
-
 class Effect:
-    """Represents a hazard effect with duration and properties"""
-    def __init__(self, name, description, duration=3, stackable=False):
+    """Base class for all effects in the game."""
+    
+    def __init__(self, name, description, duration=3):
+        """Initialize an Effect object."""
         self.name = name
         self.description = description
         self.duration = duration
-        self.stackable = stackable
-        self.remaining_turns = duration
-
-    def update(self):
-        """Decrement remaining turns and return True if expired"""
-        self.remaining_turns -= 1
-        return self.remaining_turns <= 0
-
-    def __str__(self):
-        return f"{self.name}"
-        
-    @staticmethod
-    def load_effect_messages(effect_type):
-        """Load effect messages from the JSON file."""
-        import json
-        import os
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            file_path = os.path.join(script_dir, 'npc_effects.json')
-            with open(file_path, 'r') as f:
-                data = json.load(f)
-                return data.get(effect_type, {})
-        except (FileNotFoundError, json.JSONDecodeError):
-            # Return empty dict if file not found or invalid
-            return {}
     
-
-class HallucinationEffect(Effect):
-    """Hallucinogenic effect that affects perception and behavior."""
-    def __init__(self):
-        super().__init__("Hallucination", "Perception altered by hallucinogens")
-        self.duration = 5
-        self.effect_data = self.load_effect_messages("hallucination")
+    def apply(self, target):
+        """Apply the effect to a target."""
+        if hasattr(target, 'active_effects'):
+            target.active_effects[self.name] = self.duration
+            return True, f"Applied {self.name} effect to {target.name if hasattr(target, 'name') else 'target'}."
+        return False, "Target cannot have effects applied."
     
-    def get_hallucination_message(self, plural=False):
-        """Get a random hallucination message."""
-        message_type = "plural" if plural else "singular"
-        messages = self.effect_data.get(message_type, ["is hallucinating"])
-        return random.choice(messages)
+    def update(self, target):
+        """Update the effect on a target."""
+        return False, "Effect has no update behavior."
     
-    def get_combat_prevention_message(self):
-        """Get a message explaining why the NPC can't fight."""
-        messages = self.effect_data.get("combat_prevention", ["is too distracted to fight"])
-        return random.choice(messages)
-        
-    def affects_combat(self):
-        """Determines if this effect prevents combat behavior."""
-        return True  # This effect prevents combat
+    def remove(self, target):
+        """Remove the effect from a target."""
+        if hasattr(target, 'active_effects') and self.name in target.active_effects:
+            del target.active_effects[self.name]
+            return True, f"Removed {self.name} effect from {target.name if hasattr(target, 'name') else 'target'}."
+        return False, "Target does not have this effect."
 
 
-class ConfusionEffect(Effect):
-    """Confusion effect that makes NPCs behave erratically."""
-    def __init__(self):
-        super().__init__("Confusion", "Confused and disoriented", duration=3)
-        self.effect_data = self.load_effect_messages("confusion")
+class PlantEffect(Effect):
+    """An effect that accelerates plant growth."""
     
-    def get_confusion_message(self, plural=False):
-        """Get a random confusion message."""
-        message_type = "plural" if plural else "singular"
-        messages = self.effect_data.get(message_type, ["is confused"])
-        return random.choice(messages)
+    def __init__(self, duration=3):
+        """Initialize a PlantEffect object."""
+        super().__init__("Plant Growth", "Accelerates plant growth.", duration)
     
-    def affects_combat(self):
-        """Determines if this effect prevents combat behavior."""
-        # 50% chance to prevent combat
-        return random.random() < 0.5
+    def apply_to_plants(self, plants):
+        """Apply the effect to plants."""
+        if not plants:
+            return False, "No plants to apply effect to."
         
+        # Accelerate growth for all plants
+        for plant_data in plants:
+            plant_data['growth'] += 1
+        
+        return True, "The plants grow rapidly!"
 
 
-
-class PlantEffect:
-    """Base class for all plant effects."""
-    def __init__(self, name, description):
-        self.name = name
-        self.description = description
+class SupervisionEffect(Effect):
+    """An effect that enhances the player's vision."""
     
-    def apply_to_player(self, player, game):
-        """Apply this effect to the player."""
-        return f"The {self.name} effect is applied to you."
+    def __init__(self, duration=5):
+        """Initialize a SupervisionEffect object."""
+        super().__init__("Supervision", "Enhances vision, allowing you to see hidden objects and NPCs.", duration)
     
-    def __str__(self):
-        return self.name
+    def apply(self, player):
+        """Apply the effect to the player."""
+        result = super().apply(player)
+        
+        if result[0]:
+            # Reveal hidden NPCs and objects in the current area
+            hidden_things = []
+            
+            # Check for hidden NPCs
+            if hasattr(player, 'current_area') and hasattr(player.current_area, 'npcs'):
+                for npc in player.current_area.npcs:
+                    if hasattr(npc, 'hidden') and npc.hidden:
+                        hidden_things.append(f"NPC: {npc.name}")
+                        npc.hidden = False
+            
+            # Check for hidden objects
+            if hasattr(player, 'current_area') and hasattr(player.current_area, 'objects'):
+                for obj in player.current_area.objects:
+                    if hasattr(obj, 'hidden') and obj.hidden:
+                        hidden_things.append(f"Object: {obj.name}")
+                        obj.hidden = False
+            
+            if hidden_things:
+                hidden_str = ", ".join(hidden_things)
+                return True, f"Your vision is enhanced! You can now see: {hidden_str}"
+            else:
+                return True, "Your vision is enhanced, but there's nothing hidden to see."
+        
+        return result
 
 
-class SupervisionEffect(PlantEffect):
-    """Effect that allows the player to see hidden items."""
-    def __init__(self):
-        super().__init__("Supervision", "Allows you to see hidden items")
-        self.duration = 3  # Number of turns the effect lasts
+class HackedPlantEffect(Effect):
+    """An effect that causes plants to produce special items."""
     
-    def apply_to_player(self, player, game):
-        """Apply supervision effect to player, spawning hidden items in the area."""
-        # Import here to avoid circular imports
-        from items import Item
-        
-        # Add the effect to player's active effects
-        if not hasattr(player, 'active_effects'):
-            player.active_effects = {}
-        
-        player.active_effects[self.name] = self.duration
-        
-        # Spawn hidden items in the current area
-        hidden_items = [
-            Item("Encrypted USB", "A USB stick with encrypted data.", 50),
-            Item("Strange Crystal", "A crystal that glows with an otherworldly light.", 75),
-            Item("Tech Fragment", "A piece of advanced technology.", 30)
-        ]
-        
-        # Add 1-2 random hidden items to the area
-        num_items = random.randint(1, 2)
-        for _ in range(num_items):
-            item = random.choice(hidden_items)
-            player.current_area.add_item(item)
-        
-        return f"Your vision shifts and warps. Suddenly, you can see things that weren't visible before. The {self.name} effect will last for {self.duration} turns."
-
-
-class HackedPlantEffect(PlantEffect):
-    """Effect that makes plants come alive."""
-    def __init__(self):
-        super().__init__("Hacked Plant", "Plants may come alive and follow commands")
+    def __init__(self, duration=3):
+        """Initialize a HackedPlantEffect object."""
+        super().__init__("Hacked Plant", "Causes plants to produce special items.", duration)
     
-    def apply_to_player(self, player, game):
-        """Apply hacked plant effect, allowing control of plants."""
-        if not hasattr(player, 'active_effects'):
-            player.active_effects = {}
+    def apply_to_plants(self, plants):
+        """Apply the effect to plants."""
+        if not plants:
+            return False, "No plants to apply effect to."
         
-        player.active_effects[self.name] = 5  # Lasts for 5 turns
+        # Modify plants to produce special items
+        for plant_data in plants:
+            plant_data['hacked'] = True
         
-        return "You feel a strange connection to the plants around you. They seem to respond to your thoughts."
+        return True, "The plants' DNA has been hacked! They will now produce special items when harvested."
 
 
 class Substance:
-    """Base class for substances that can be used on plants."""
-    def __init__(self, name, description):
+    """A substance that can be consumed for an effect."""
+    
+    def __init__(self, name, description, effect):
+        """Initialize a Substance object."""
         self.name = name
         self.description = description
-        self.effects = []
+        self.effect = effect
     
-    def add_effect(self, effect):
-        """Add an effect to this substance."""
-        self.effects.append(effect)
-    
-    def __str__(self):
-        return self.name
+    def consume(self, target):
+        """Consume the substance."""
+        if self.effect:
+            return self.effect.apply(target)
+        return False, "The substance has no effect."
 
 
 class HackedMilk(Substance):
-    """A special substance that gives plants the supervision effect."""
+    """A special substance that causes hallucinations."""
+    
     def __init__(self):
-        super().__init__("Hacked Milk", "A strange, glowing milk-like substance that can alter plant growth.")
-        self.add_effect(SupervisionEffect())
+        """Initialize a HackedMilk object."""
+        super().__init__(
+            "Hacked Milk",
+            "A strange, glowing milk-like substance.",
+            HallucinationEffect()
+        )
 
 
-# idea for later: a substance that causes NPCs to use the garden uncontrollably, call the effect "green fever" and make it spawn tons of seeds and possibly add more soil plots.
+class HallucinationEffect(Effect):
+    """An effect that causes hallucinations."""
+    
+    def __init__(self, duration=5):
+        """Initialize a HallucinationEffect object."""
+        super().__init__("Hallucination", "Causes visual and auditory hallucinations.", duration)
+    
+    def apply(self, target):
+        """Apply the effect to a target."""
+        result = super().apply(target)
+        
+        if result[0]:
+            # Generate random hallucinations
+            hallucinations = [
+                "You see colorful patterns swirling in the air.",
+                "You hear whispers coming from nowhere.",
+                "The walls seem to breathe.",
+                "Objects appear to melt and reform.",
+                "You see shadowy figures at the edge of your vision.",
+                "Everything looks like it's made of neon light.",
+                "You hear music that isn't there.",
+                "The ground feels like it's moving beneath your feet."
+            ]
+            
+            hallucination = random.choice(hallucinations)
+            
+            return True, f"You experience hallucinations: {hallucination}"
+        
+        return result
+    
+    def apply_to_npcs(self, npcs):
+        """Apply the effect to NPCs."""
+        if not npcs:
+            return False, "No NPCs to apply effect to."
+        
+        # Make NPCs hallucinate
+        hallucinating_npcs = []
+        for npc in npcs:
+            if hasattr(npc, 'active_effects'):
+                npc.active_effects[self.name] = self.duration
+                hallucinating_npcs.append(npc.name)
+        
+        if not hallucinating_npcs:
+            return False, "No NPCs were affected."
+        
+        hallucinating_str = ", ".join(hallucinating_npcs)
+        
+        return True, f"{hallucinating_str} {'are' if len(hallucinating_npcs) > 1 else 'is'} now hallucinating!"
+
+
+class ConfusionEffect(Effect):
+    """An effect that causes confusion."""
+    
+    def __init__(self, duration=3):
+        """Initialize a ConfusionEffect object."""
+        super().__init__("Confusion", "Causes confusion and disorientation.", duration)
+    
+    def apply(self, target):
+        """Apply the effect to a target."""
+        result = super().apply(target)
+        
+        if result[0]:
+            return True, "You feel confused and disoriented."
+        
+        return result
+    
+    def apply_to_npcs(self, npcs):
+        """Apply the effect to NPCs."""
+        if not npcs:
+            return False, "No NPCs to apply effect to."
+        
+        # Make NPCs confused
+        confused_npcs = []
+        for npc in npcs:
+            if hasattr(npc, 'active_effects'):
+                npc.active_effects[self.name] = self.duration
+                confused_npcs.append(npc.name)
+        
+        if not confused_npcs:
+            return False, "No NPCs were affected."
+        
+        confused_str = ", ".join(confused_npcs)
+        
+        return True, f"{confused_str} {'are' if len(confused_npcs) > 1 else 'is'} now confused!"

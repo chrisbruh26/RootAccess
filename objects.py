@@ -1,244 +1,117 @@
-import random
-from effects import HackedPlantEffect
+"""
+Objects module for Root Access game.
+This module defines various interactive objects for the game.
+"""
 
-# ----------------------------- #
-# INTERACTIVE OBJECTS           #
-# ----------------------------- #
-
-class Computer:
-    def __init__(self, name="Computer", description="A computer terminal."):
+class GameObject:
+    """Base class for all interactive objects in the game."""
+    
+    def __init__(self, name, description):
+        """Initialize a GameObject object."""
         self.name = name
         self.description = description
-        self.is_hacked = False
-        self.programs = []
-        self.data = []
-        self.security_level = 1  # 1-5, with 5 being the most secure
-    
-    def hack(self, player):
-        """Attempt to hack the computer."""
-        # In a more complex implementation, this would check player skills
-        if self.is_hacked:
-            return False, "This computer is already hacked."
-        
-        # Simple hacking mechanic - 70% base chance of success, reduced by security level
-        success_chance = 0.7 - (self.security_level * 0.1)
-        if random.random() < success_chance:
-            self.is_hacked = True
-            return True, f"You successfully hack into the {self.name}!"
-        else:
-            return False, f"You fail to hack into the {self.name}. The security is too strong."
-    
-    def use(self, player):
-        """Use the computer."""
-        if not self.is_hacked:
-            return False, f"You need to hack the {self.name} first."
-        
-        # Return a list of available programs
-        if not self.programs:
-            return True, "The computer is hacked, but there are no useful programs installed."
-        
-        program_list = "\n".join(f"- {program}" for program in self.programs)
-        return True, f"Available programs:\n{program_list}"
-    
-    def run_program(self, program_name, player, game):
-        """Run a specific program on the computer."""
-        if not self.is_hacked:
-            return False, f"You need to hack the {self.name} first."
-        
-        program = next((p for p in self.programs if p.lower() == program_name.lower()), None)
-        if not program:
-            return False, f"The program '{program_name}' is not installed on this computer."
-        
-        # Handle different programs
-        if program == "data_miner":
-            return True, "You run the data mining program and extract valuable information."
-        elif program == "security_override":
-            return True, "You override the security systems in the area."
-        elif program == "plant_hacker":
-            # Give the player the plant hacking effect
-            effect = HackedPlantEffect()
-            result = effect.apply_to_player(player, game)
-            return True, result
-        
-        return True, f"You run the {program} program."
+        self.x = None  # X coordinate on the grid
+        self.y = None  # Y coordinate on the grid
+        self.location = None
     
     def __str__(self):
-        status = "hacked" if self.is_hacked else "locked"
-        return f"{self.name} ({status})"
+        """Return a string representation of the object."""
+        return self.name
+    
+    def place_on_grid(self, grid, x, y):
+        """Place the object on a grid at the specified coordinates."""
+        if grid.place_object(self, x, y):
+            self.x = x
+            self.y = y
+            return True
+        return False
+    
+    def interact(self, player):
+        """Interact with the object."""
+        return True, f"You interact with the {self.name}."
 
-class HidingSpot:
-    """A place where the player can hide from NPCs."""
-    def __init__(self, name, description, stealth_bonus=0.5):
-        self.name = name
-        self.description = description
-        self.stealth_bonus = stealth_bonus  # Reduces detection chance by this percentage
+
+class Container(GameObject):
+    """An object that can contain items."""
+    
+    def __init__(self, name, description):
+        """Initialize a Container object."""
+        super().__init__(name, description)
+        self.items = []
+    
+    def add_item(self, item):
+        """Add an item to the container."""
+        self.items.append(item)
+    
+    def remove_item(self, item_name):
+        """Remove an item from the container by name."""
+        item = next((i for i in self.items if i.name.lower() == item_name.lower()), None)
+        if item:
+            self.items.remove(item)
+            return item
+        return None
+    
+    def interact(self, player):
+        """Interact with the container."""
+        if not self.items:
+            return True, f"The {self.name} is empty."
+        
+        item_names = ", ".join(str(item) for item in self.items)
+        return True, f"The {self.name} contains: {item_names}"
+
+
+class Computer(GameObject):
+    """A computer that can be used to run programs."""
+    
+    def __init__(self, name, description):
+        """Initialize a Computer object."""
+        super().__init__(name, description)
+        self.programs = []
+    
+    def add_program(self, program):
+        """Add a program to the computer."""
+        self.programs.append(program)
+    
+    def interact(self, player):
+        """Interact with the computer."""
+        if not self.programs:
+            return True, f"The {self.name} has no programs installed."
+        
+        program_names = ", ".join(str(program) for program in self.programs)
+        return True, f"The {self.name} has the following programs: {program_names}"
+
+
+class HidingSpot(GameObject):
+    """A spot where the player can hide."""
+    
+    def __init__(self, name, description):
+        """Initialize a HidingSpot object."""
+        super().__init__(name, description)
         self.is_occupied = False
         self.occupant = None
     
-    def hide(self, player):
-        """Player attempts to hide in this spot."""
+    def enter(self, player):
+        """Enter the hiding spot."""
         if self.is_occupied:
-            return False, f"Someone is already hiding in the {self.name}."
+            return False, f"The {self.name} is already occupied."
         
         self.is_occupied = True
         self.occupant = player
-        player.hidden = True
-        player.hiding_spot = self
-        
-        # Clear detection status when hiding
-        player.detected_by.clear()
-        
-        return True, f"You hide in the {self.name}. Gang members won't be able to detect you while you're hidden."
+        return True, f"You hide in the {self.name}."
     
     def leave(self, player):
-        """Player leaves the hiding spot."""
-        if self.occupant != player:
-            return False, "You're not hiding here."
+        """Leave the hiding spot."""
+        if not self.is_occupied or self.occupant != player:
+            return False, f"You're not hiding in the {self.name}."
         
         self.is_occupied = False
         self.occupant = None
-        player.hidden = False
-        player.hiding_spot = None
-        
         return True, f"You emerge from the {self.name}."
     
-    def __str__(self):
+    def interact(self, player):
+        """Interact with the hiding spot."""
         if self.is_occupied:
-            return f"{self.name} (occupied)"
-        else:
-            return f"{self.name}"
-    
-
-class Storage:
-    """A storage container for items."""
-    def __init__(self, name="Storage", description="A storage container."):
-        self.name = name
-        self.description = description
-        self.items = []
-    
-    def add_item(self, item):
-        """Add an item to the storage."""
-        self.items.append(item)
-        return True, f"You add the {item.name} to the {self.name}."
-    
-    def remove_item(self, item_name):
-        """Remove an item from the storage."""
-        item = next((i for i in self.items if i.name.lower() == item_name.lower()), None)
-        if not item:
-            return False, f"There is no {item_name} in the {self.name}."
-        
-        self.items.remove(item)
-        return True, f"You take the {item.name} from the {self.name}."
-    
-    def __str__(self):
-        if not self.items:
-            return f"{self.name} (empty)"
-        
-        item_list = "\n".join(f"- {item}" for item in self.items)
-        return f"{self.name}:\n{item_list}"
-    
-
-class BreakableGlassObject:
-    """Objects that have breakable glass."""
-    def __init__(self, name, description="A breakable object with glass.", broken=False):
-        self.name = name
-        self.description = description
-        self.is_broken = broken
-        
-    def break_glass(self, breaker=None, method=None):
-        """
-        Break the glass of the object.
-        
-        Args:
-            breaker: The entity (player or NPC) breaking the glass
-            method: The method used to break the glass (e.g., "smash", "shoot")
-            
-        Returns:
-            tuple: (success, message)
-        """
-        if self.is_broken:
-            return False, f"The {self.name} is already broken."
-        
-        self.is_broken = True
-        
-        # Generate appropriate message based on who broke it and how
-        if breaker:
-            # Check if breaker is the player
-            from player import Player
-            is_player = isinstance(breaker, Player)
-            
-            if method:
-                if is_player:
-                    message = f"You {method} the {self.name} and it shatters!"
-                else:
-                    message = f"{breaker.name} {method}es the {self.name} and it shatters!"
-            else:
-                if is_player:
-                    message = f"You break the {self.name} and it shatters!"
-                else:
-                    message = f"{breaker.name} breaks the {self.name} and it shatters!"
-        else:
-            message = f"The {self.name} shatters!"
-            
-        return True, message
-    
-    def __str__(self):
-        if self.is_broken:
-            return f"{self.name} (broken)"
-        else:
-            return f"{self.name}"
-
-
-class VendingMachine(BreakableGlassObject):
-    """A Vending Machine."""
-    def __init__(self, name="Vending Machine", description="A vending machine filled with snacks and drinks."):
-        super().__init__(name.lower(), description, broken=False)
-        self.display_name = name  # For display purposes
-        self.items = []
-    
-    def break_glass(self, breaker=None, method=None):
-        """
-        Break the glass of the vending machine and spill its contents.
-        
-        Args:
-            breaker: The entity breaking the glass
-            method: The method used to break the glass
-            
-        Returns:
-            tuple: (success, message, spilled_items)
-        """
-        result = super().break_glass(breaker, method)
-        
-        if not result[0]:
-            return False, result[1], []
-            
-        # Create a copy of items to spill
-        spilled_items = self.items.copy()
-        message = result[1]
-        
-        # Check if breaker is the player for appropriate messaging
-        from player import Player
-        is_player = isinstance(breaker, Player)
-        
-        if spilled_items:
-            item_names = ", ".join(item.name for item in spilled_items)
-            if is_player:
-                message += f"\nItems spill out onto the floor: {item_names}"
-            else:
-                message += f"\nItems spill out onto the floor: {item_names}"
-        else:
-            if is_player:
-                message += "\nYou find that the vending machine is empty."
-            else:
-                message += "\nThe vending machine is empty."
-            
-        return True, message, spilled_items
-    
-    def add_item(self, item):
-        """Add an item to the vending machine."""
-        self.items.append(item)
-        
-    '''def __str__(self): # commenting out for now in case I need it 
-        status = "broken" if self.is_broken else "intact"
-        return f"{self.display_name} ({status})"
-'''
+            if self.occupant == player:
+                return self.leave(player)
+            return False, f"The {self.name} is occupied."
+        return self.enter(player)

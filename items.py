@@ -663,6 +663,52 @@ class Drone(TechItem):
             print(messages[-1])
             time.sleep(0.5)
             
+            # First check if the target uses the new state system
+            if hasattr(target, 'set_state') and hasattr(target, 'get_state'):
+                # Target uses the new state system
+                messages.append("Advanced neural interface detected...")
+                print(messages[-1])
+                time.sleep(0.5)
+                
+                # Show available states for selection
+                messages.append("Available behavior states:")
+                state_descriptions = {
+                    'silly': "peaceful and playful",
+                    'aggressive': "hostile and dangerous",
+                    'tech': "focused on technology",
+                    'gardening': "tending to plants"
+                }
+                
+                for state, desc in state_descriptions.items():
+                    messages.append(f"- {state}: {desc}")
+                
+                messages.append("Select a state by typing 'hack [target number] behavior [state]'")
+                messages.append("Example: 'hack 1 behavior aggressive'")
+                
+                # Check if a specific state was provided in the command
+                if len(game.process_command_args) > 3:
+                    state_name = game.process_command_args[3].lower()
+                    
+                    # Validate state name
+                    if state_name in state_descriptions:
+                        # Apply the new state
+                        target.set_state(state_name)
+                        
+                        messages.append(f"SUCCESS! {target.name}'s behavior state has been changed to '{state_descriptions[state_name]}'.")
+                        
+                        # Add active_effects attribute if it doesn't exist
+                        if not hasattr(target, 'active_effects'):
+                            target.active_effects = []
+                            
+                        return True
+                    else:
+                        messages.append(f"Invalid state '{state_name}'. Choose from: {', '.join(state_descriptions.keys())}")
+                        return False
+                
+                # If no specific state was provided, just show the menu
+                return False
+            
+            # If target doesn't use the new state system, fall back to the old behavior system
             # Import BehaviorType
             from npc_behavior import BehaviorType
             

@@ -47,6 +47,11 @@ class Game:
             'go': {'handler': self.cmd_move, 'category': 'movement'},
             'areas': {'handler': self.cmd_areas, 'category': 'movement'},
             
+            # Sub-area commands
+            'enter': {'handler': self.cmd_enter_sub_area, 'category': 'movement'},
+            'exit': {'handler': self.cmd_exit_sub_area, 'category': 'movement'},
+            'sub_areas': {'handler': self.cmd_list_sub_areas, 'category': 'movement'},
+            
             # Add teleport commands
             'teleport': {'handler': self.cmd_teleport, 'category': 'movement'},
             'tp': {'handler': self.cmd_teleport, 'category': 'movement'},
@@ -209,9 +214,47 @@ class Game:
             return f"You move {direction} to {self.player.current_area.name}.\n\n{self.player.current_area.get_full_description()}"
         return "You can't go that way."
 
+    def cmd_enter_sub_area(self, args):
+        """Enter a sub-area within the current area."""
+        if not args:
+            return "Enter where? Specify a sub-area."
+        
+        sub_area_name = " ".join(args)
+        result = self.player.enter_sub_area(sub_area_name)
+        
+        if result[0]:
+            self.update_turn()
+            # Get the sub-area description
+            return f"{result[1]}\n\n{self.player.current_area.get_full_description(self.player.current_sub_area)}"
+        return result[1]
+    
+    def cmd_exit_sub_area(self, args):
+        """Exit the current sub-area and return to the main area."""
+        result = self.player.exit_sub_area()
+        
+        if result[0]:
+            self.update_turn()
+            # Get the main area description
+            return f"{result[1]}\n\n{self.player.current_area.get_full_description()}"
+        return result[1]
+    
+    def cmd_list_sub_areas(self, args):
+        """List all sub-areas in the current area."""
+        if not self.player.current_area or not self.player.current_area.sub_areas:
+            return "There are no sub-areas here."
+        
+        sub_area_list = []
+        for name, sub_area in self.player.current_area.sub_areas.items():
+            sub_area_list.append(f"{sub_area.name}: {sub_area.description}")
+        
+        return "Sub-areas in this area:\n" + "\n".join(sub_area_list)
+    
     def cmd_look(self, args):
-        """Look around the current area."""
-        return self.player.current_area.get_full_description()
+        """Look around the current area or sub-area."""
+        if not self.player.current_area:
+            return "You are nowhere."
+        
+        return self.player.current_area.get_full_description(self.player.current_sub_area)
 
     def cmd_inventory(self, args):
         """Check your inventory."""
@@ -221,27 +264,57 @@ class Game:
         return f"Inventory: {items}"
 
     def cmd_take(self, args):
-        """Take an item from the area."""
+        """Take an item from the area or sub-area."""
         if not args:
             return "Take what? Specify an item."
+        
         item_name = " ".join(args)
-        item = self.player.current_area.remove_item(item_name)
-        if item:
-            self.player.add_item(item)
-            self.update_turn()
-            return f"You take the {item.name}."
+        
+        # Check if player is in a sub-area
+        if self.player.current_sub_area:
+            sub_area = self.player.current_area.get_sub_area(self.player.current_sub_area)
+            if not sub_area:
+                return "Error: Sub-area not found."
+            
+            item = sub_area.remove_item(item_name)
+            if item:
+                self.player.add_item(item)
+                self.update_turn()
+                return f"You take the {item.name}."
+        else:
+            # Player is in the main area
+            item = self.player.current_area.remove_item(item_name)
+            if item:
+                self.player.add_item(item)
+                self.update_turn()
+                return f"You take the {item.name}."
+        
         return f"There is no {item_name} here."
 
     def cmd_drop(self, args):
-        """Drop an item from your inventory."""
+        """Drop an item from your inventory into the area or sub-area."""
         if not args:
             return "Drop what? Specify an item."
+        
         item_name = " ".join(args)
         item = self.player.remove_item(item_name)
+        
         if item:
-            self.player.current_area.add_item(item)
+            # Check if player is in a sub-area
+            if self.player.current_sub_area:
+                sub_area = self.player.current_area.get_sub_area(self.player.current_sub_area)
+                if not sub_area:
+                    # If sub-area not found, add to main area
+                    self.player.current_area.add_item(item)
+                else:
+                    sub_area.add_item(item)
+            else:
+                # Player is in the main area
+                self.player.current_area.add_item(item)
+            
             self.update_turn()
             return f"You drop the {item.name}."
+        
         return f"You don't have a {item_name}."
 
     def cmd_use(self, args):

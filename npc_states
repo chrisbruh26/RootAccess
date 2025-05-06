@@ -1,0 +1,855 @@
+"""
+NPC State Pattern Implementation
+
+This module implements the State Pattern for NPC behaviors, allowing NPCs to
+transition between different behavior states based on environmental factors.
+Each state encapsulates specific behavior logic, making the system more
+scalable and easier to extend.
+"""
+
+import random
+from effects import HallucinationEffect, ConfusionEffect
+from gardening import Plant, SoilPlot
+
+# Base State class
+class NPCState:
+    """Base class for all NPC behavior states."""
+    def update(self, npc, game):
+        """
+        Update the NPC's behavior based on the current state.
+        
+        Args:
+            npc: The NPC instance
+            game: The game instance
+            
+        Returns:
+            A message describing the NPC's action, or None if no action was taken
+        """
+        pass
+    
+    def get_name(self):
+        """Get the name of this state for debugging and display purposes."""
+        return self.__class__.__name__
+    
+    def should_transition(self, npc, game):
+        """
+        Determine if the NPC should transition to a different state.
+        
+        Args:
+            npc: The NPC instance
+            game: The game instance
+            
+        Returns:
+            True if the NPC should transition to a different state, False otherwise
+        """
+        return False
+
+
+# Silly/Peaceful State
+class SillyState(NPCState):
+    """
+    Represents a silly, peaceful behavior state where NPCs engage in
+    non-aggressive activities like gardening, using items, or talking.
+    """
+    def update(self, npc, game):
+        # Skip dead NPCs
+        if not npc.is_alive:
+            return None
+            
+        # Check for effects that affect behavior
+        if hasattr(npc, 'active_effects'):
+            for effect in npc.active_effects:
+                # Check for hallucination effect
+                if isinstance(effect, HallucinationEffect) or (hasattr(effect, 'get_hallucination_message') and hasattr(effect, 'affects_combat') and effect.affects_combat()):
+                    return f"{npc.name} {effect.get_hallucination_message()}."
+                
+                # Check for confusion effect
+                elif isinstance(effect, ConfusionEffect) or (hasattr(effect, 'get_confusion_message') and hasattr(effect, 'affects_combat')):
+                    if effect.affects_combat():
+                        return f"{npc.name} {effect.get_confusion_message()}."
+        
+        # Choose a silly behavior
+        behaviors = [
+            self._gardening_behavior,
+            self._item_use_behavior,
+            self._talk_behavior,
+            self._tech_behavior,
+            self._pickup_behavior
+        ]
+        
+        # Weight the behaviors (gardening and item use are more common)
+        weights = [0.3, 0.3, 0.2, 0.1, 0.1]
+        
+        # Choose a behavior based on weights
+        behavior = random.choices(behaviors, weights=weights)[0]
+        return behavior(npc, game)
+    
+    def _gardening_behavior(self, npc, game):
+        """Implement gardening behavior for NPCs."""
+        # Check if NPC has seeds
+        seeds = [item for item in npc.items if hasattr(item, 'crop_type')]
+        if seeds and hasattr(npc.location, 'objects'):
+            soil_plots = [obj for obj in npc.location.objects if hasattr(obj, 'add_plant')]
+            if soil_plots:
+                soil = random.choice(soil_plots)
+                seed = random.choice(seeds)
+                
+                # Create a plant from the seed
+                plant = Plant(
+                    f"{seed.crop_type} plant", 
+                    f"A young {seed.crop_type} plant.", 
+                    seed.crop_type, 
+                    seed.value * 2
+                )
+                
+                # Try to plant it
+                result = soil.add_plant(plant)
+                if result[0]:  # Successfully planted
+                    npc.items.remove(seed)
+                    return f"{npc.name} plants {seed.name} in the {soil.name}."
+        
+        # If no seeds or no soil, just do a gardening-related action
+        return f"{npc.name} looks around for a good spot to plant something."
+    
+    def _item_use_behavior(self, npc, game):
+        """Implement item use behavior for NPCs."""
+        if not npc.items:
+            return f"{npc.name} checks their pockets but finds nothing interesting."
+            
+        item = random.choice(npc.items)
+        
+        # If it's a consumable, use it
+        if hasattr(item, 'consume'):
+            # Remove from inventory
+            npc.items.remove(item)
+            return f"{npc.name} consumes {item.name}."
+        
+        # If it's a tech item, fiddle with it
+        if hasattr(item, 'is_electronic') and item.is_electronic:
+            return f"{npc.name} fiddles with their {item.name}."
+            
+        # Generic item use
+        return f"{npc.name} examines their {item.name} carefully."
+    
+    def _talk_behavior(self, npc, game):
+        """Implement talking behavior for NPCs."""
+        # Find another NPC to talk to
+        other_npcs = [other for other in npc.location.npcs if other != npc and other.is_alive]
+        if other_npcs:
+            other = random.choice(other_npcs)
+            
+            # Generate a random conversation topic
+            topics = [
+                "the weather",
+                "local gossip",
+                "their favorite food",
+                "a funny story",
+                "gardening tips",
+                "technology",
+                "conspiracy theories"
+            ]
+            topic = random.choice(topics)
+            
+            return f"{npc.name} chats with {other.name} about {topic}."
+        
+        # If no one to talk to
+        return f"{npc.name} mumbles to themselves."
+    
+    def _tech_behavior(self, npc, game):
+        """Implement technology-related behavior for NPCs."""
+        # Check if there are any computers or tech objects in the area
+        tech_objects = [obj for obj in npc.location.objects 
+                       if hasattr(obj, 'is_electronic') and obj.is_electronic]
+        
+        if tech_objects:
+            tech_obj = random.choice(tech_objects)
+            return f"{npc.name} tinkers with the {tech_obj.name}."
+        
+        # If no tech objects, check for tech items
+        tech_items = [item for item in npc.items 
+                     if hasattr(item, 'is_electronic') and item.is_electronic]
+        
+        if tech_items:
+            item = random.choice(tech_items)
+            return f"{npc.name} fiddles with their {item.name}."
+            
+        # If no tech items either
+        return f"{npc.name} looks around for something electronic to play with."
+    
+    def _pickup_behavior(self, npc, game):
+        """Implement item pickup behavior for NPCs."""
+        if hasattr(npc.location, 'items') and npc.location.items:
+            item = random.choice(npc.location.items)
+            # Remove the item from the location and add it to NPC's inventory
+            npc.location.items.remove(item)
+            npc.add_item(item)
+            return f"{npc.name} picks up {item.name}."
+        
+        return f"{npc.name} looks around for something interesting to pick up."
+    
+    def should_transition(self, npc, game):
+        """
+        Determine if the NPC should transition from Silly to Aggressive state.
+        Transition factors:
+        - Presence of hazards
+        - Presence of enemy gang members
+        - Random chance (low probability)
+        """
+        # Check for hazards in the area
+        if hasattr(npc.location, 'hazards') and npc.location.hazards:
+            return random.random() < 0.7  # 70% chance to become aggressive when hazards present
+        
+        # Check for enemy gang members (if NPC is a gang member)
+        if hasattr(npc, 'gang'):
+            enemy_gang_members = [other for other in npc.location.npcs 
+                                 if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive]
+            if enemy_gang_members:
+                return random.random() < 0.8  # 80% chance to become aggressive when enemies present
+        
+        # Random chance to become aggressive (5%)
+        return random.random() < 0.05
+
+
+# Aggressive State
+class AggressiveState(NPCState):
+    """
+    Represents an aggressive behavior state where NPCs engage in
+    combat, threatening, and destructive activities.
+    """
+    def update(self, npc, game):
+        # Skip dead NPCs
+        if not npc.is_alive:
+            return None
+            
+        # Check for effects that affect behavior
+        if hasattr(npc, 'active_effects'):
+            for effect in npc.active_effects:
+                # Check for hallucination effect
+                if isinstance(effect, HallucinationEffect) or (hasattr(effect, 'get_hallucination_message') and hasattr(effect, 'affects_combat') and effect.affects_combat()):
+                    return f"{npc.name} {effect.get_hallucination_message()}."
+                
+                # Check for confusion effect
+                elif isinstance(effect, ConfusionEffect) or (hasattr(effect, 'get_confusion_message') and hasattr(effect, 'affects_combat')):
+                    if effect.affects_combat():
+                        return f"{npc.name} {effect.get_confusion_message()}."
+        
+        # Player detection (if NPC is a gang member)
+        if hasattr(npc, 'detect_player') and game.player.current_area == npc.location:
+            detection_result = npc.detect_player(game.player, game)
+            if detection_result:
+                return detection_result
+                
+        # If player is detected, attack
+        if hasattr(game.player, 'detected_by') and hasattr(npc, 'gang') and npc.gang in game.player.detected_by:
+            if random.random() < 0.9:  # 90% chance to attack if detected
+                return npc.attack_player(game.player)
+        
+        # Choose an aggressive behavior
+        behaviors = [
+            self._attack_behavior,
+            self._threaten_behavior,
+            self._destroy_behavior,
+            self._weapon_use_behavior
+        ]
+        
+        # Weight the behaviors
+        weights = [0.4, 0.3, 0.2, 0.1]
+        
+        # Choose a behavior based on weights
+        behavior = random.choices(behaviors, weights=weights)[0]
+        return behavior(npc, game)
+    
+    def _attack_behavior(self, npc, game):
+        """Implement attack behavior for NPCs."""
+        # Find potential targets
+        if hasattr(npc, 'gang'):
+            # Gang members attack other gang members
+            potential_targets = [other for other in npc.location.npcs 
+                               if hasattr(other, 'gang') and other.gang != npc.gang
+                               and other.is_alive]
+                               
+            if potential_targets:
+                target = random.choice(potential_targets)
+                return npc.attack_npc(target)
+        
+        # If no specific targets or not a gang member, find any target
+        potential_targets = [other for other in npc.location.npcs 
+                           if other != npc and other.is_alive]
+                           
+        if potential_targets:
+            target = random.choice(potential_targets)
+            
+            # If they have a weapon, use it
+            weapons = [item for item in npc.items if hasattr(item, 'damage')]
+            if weapons:
+                weapon = random.choice(weapons)
+                
+                # Apply damage to target
+                if hasattr(target, 'health'):
+                    damage = random.randint(weapon.damage // 2, weapon.damage)
+                    target.health -= damage
+                    
+                    # Check if target died
+                    if target.health <= 0:
+                        target.is_alive = False
+                        if hasattr(target, 'gang'):
+                            target.gang.remove_member(target)
+                        return f"{npc.name} uses {weapon.name} to attack {target.name} for {damage} damage, defeating them!"
+                    
+                    return f"{npc.name} uses {weapon.name} to attack {target.name} for {damage} damage!"
+            
+            # If no weapon, use fists
+            if hasattr(target, 'health'):
+                damage = random.randint(3, 8)  # Fists do less damage
+                target.health -= damage
+                
+                # Check if target died
+                if target.health <= 0:
+                    target.is_alive = False
+                    if hasattr(target, 'gang'):
+                        target.gang.remove_member(target)
+                    return f"{npc.name} punches {target.name} for {damage} damage, defeating them!"
+                
+                return f"{npc.name} punches {target.name} for {damage} damage!"
+        
+        # If no targets
+        return f"{npc.name} looks around aggressively for someone to fight."
+    
+    def _threaten_behavior(self, npc, game):
+        """Implement threatening behavior for NPCs."""
+        potential_targets = [other for other in npc.location.npcs 
+                           if other != npc and other.is_alive]
+                           
+        if potential_targets:
+            target = random.choice(potential_targets)
+            
+            # If they have a weapon, threaten with it
+            weapons = [item for item in npc.items if hasattr(item, 'damage')]
+            if weapons:
+                weapon = random.choice(weapons)
+                return f"{npc.name} threatens {target.name} with {weapon.name}!"
+            
+            # If no weapon
+            return f"{npc.name} aggressively confronts {target.name}!"
+        
+        # If no targets
+        return f"{npc.name} makes threatening gestures."
+    
+    def _destroy_behavior(self, npc, game):
+        """Implement destructive behavior for NPCs."""
+        # Find objects that can be broken
+        breakable_objects = [obj for obj in npc.location.objects 
+                           if hasattr(obj, 'can_break') and obj.can_break]
+        
+        if breakable_objects:
+            obj = random.choice(breakable_objects)
+            
+            # If they have a weapon, use it to break the object
+            weapons = [item for item in npc.items if hasattr(item, 'damage')]
+            if weapons:
+                weapon = random.choice(weapons)
+                if hasattr(obj, 'break_object'):
+                    result = obj.break_object()
+                    if result[0]:
+                        return f"{npc.name} uses {weapon.name} to break the {obj.name}!"
+            
+            # If no weapon or breaking failed
+            return f"{npc.name} tries to break the {obj.name}!"
+        
+        # If no breakable objects
+        return f"{npc.name} looks for something to break."
+    
+    def _weapon_use_behavior(self, npc, game):
+        """Implement weapon use behavior for NPCs."""
+        # Check if NPC has weapons
+        weapons = [item for item in npc.items if hasattr(item, 'damage')]
+        
+        if weapons:
+            weapon = random.choice(weapons)
+            return f"{npc.name} brandishes their {weapon.name} menacingly."
+        
+        # If no weapons, look for one
+        if hasattr(npc.location, 'items'):
+            potential_weapons = [item for item in npc.location.items 
+                               if hasattr(item, 'damage')]
+            
+            if potential_weapons:
+                weapon = random.choice(potential_weapons)
+                npc.location.items.remove(weapon)
+                npc.add_item(weapon)
+                return f"{npc.name} grabs {weapon.name} from the ground!"
+        
+        # If no weapons available
+        return f"{npc.name} looks around for a weapon."
+    
+    def should_transition(self, npc, game):
+        """
+        Determine if the NPC should transition from Aggressive to Silly state.
+        Transition factors:
+        - Absence of hazards and enemies
+        - Presence of distractions (food, tech)
+        - Random chance (moderate probability)
+        """
+        # Check if hazards are gone
+        if not hasattr(npc.location, 'hazards') or not npc.location.hazards:
+            # Check if enemies are gone
+            if not hasattr(npc, 'gang') or not any(other for other in npc.location.npcs 
+                                                if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive):
+                return random.random() < 0.4  # 40% chance to calm down when threats are gone
+        
+        # Check for distractions (food items)
+        food_items = [item for item in npc.items if hasattr(item, 'nutrition')]
+        if food_items:
+            return random.random() < 0.3  # 30% chance to be distracted by food
+        
+        # Check for tech distractions
+        tech_items = [item for item in npc.items if hasattr(item, 'is_electronic') and item.is_electronic]
+        if tech_items:
+            return random.random() < 0.25  # 25% chance to be distracted by tech
+        
+        # Random chance to calm down (10%)
+        return random.random() < 0.1
+
+
+# Tech-focused State
+class TechState(NPCState):
+    """
+    Represents a technology-focused behavior state where NPCs engage in
+    hacking, using electronic devices, and tech-related activities.
+    """
+    def update(self, npc, game):
+        # Skip dead NPCs
+        if not npc.is_alive:
+            return None
+            
+        # Check for effects that affect behavior
+        if hasattr(npc, 'active_effects'):
+            for effect in npc.active_effects:
+                # Check for hallucination effect
+                if isinstance(effect, HallucinationEffect) or (hasattr(effect, 'get_hallucination_message') and hasattr(effect, 'affects_combat') and effect.affects_combat()):
+                    return f"{npc.name} {effect.get_hallucination_message()}."
+                
+                # Check for confusion effect
+                elif isinstance(effect, ConfusionEffect) or (hasattr(effect, 'get_confusion_message') and hasattr(effect, 'affects_combat')):
+                    if effect.affects_combat():
+                        return f"{npc.name} {effect.get_confusion_message()}."
+        
+        # Choose a tech behavior
+        behaviors = [
+            self._hacking_behavior,
+            self._tech_item_use,
+            self._tech_analysis,
+            self._tech_communication
+        ]
+        
+        # Weight the behaviors
+        weights = [0.4, 0.3, 0.2, 0.1]
+        
+        # Choose a behavior based on weights
+        behavior = random.choices(behaviors, weights=weights)[0]
+        return behavior(npc, game)
+    
+    def _hacking_behavior(self, npc, game):
+        """Implement hacking behavior for NPCs."""
+        # Find electronic objects in the area
+        electronic_objects = [obj for obj in npc.location.objects 
+                            if hasattr(obj, 'is_electronic') and obj.is_electronic]
+        
+        if electronic_objects:
+            obj = random.choice(electronic_objects)
+            
+            # If the object has a hack method, use it
+            if hasattr(obj, 'hack'):
+                result = obj.hack(npc)
+                if result[0]:
+                    return f"{npc.name} successfully hacks the {obj.name}!"
+                else:
+                    return f"{npc.name} attempts to hack the {obj.name} but fails."
+            
+            # If no hack method
+            return f"{npc.name} tries to interface with the {obj.name}."
+        
+        # If no electronic objects
+        return f"{npc.name} looks for something to hack."
+    
+    def _tech_item_use(self, npc, game):
+        """Implement tech item use behavior for NPCs."""
+        # Find electronic items in inventory
+        tech_items = [item for item in npc.items 
+                     if hasattr(item, 'is_electronic') and item.is_electronic]
+        
+        if tech_items:
+            item = random.choice(tech_items)
+            
+            # If the item has a use method, use it
+            if hasattr(item, 'use'):
+                result = item.use(npc, game)
+                if result[0]:
+                    return f"{npc.name} uses their {item.name} successfully."
+                else:
+                    return f"{npc.name} tries to use their {item.name} but encounters an error."
+            
+            # If no use method
+            return f"{npc.name} fiddles with their {item.name}."
+        
+        # If no tech items
+        return f"{npc.name} wishes they had some tech gadgets to play with."
+    
+    def _tech_analysis(self, npc, game):
+        """Implement tech analysis behavior for NPCs."""
+        # Analyze the area for tech opportunities
+        return f"{npc.name} scans the area with a small device, analyzing for tech vulnerabilities."
+    
+    def _tech_communication(self, npc, game):
+        """Implement tech communication behavior for NPCs."""
+        return f"{npc.name} speaks into a communication device, using technical jargon."
+    
+    def should_transition(self, npc, game):
+        """
+        Determine if the NPC should transition from Tech to another state.
+        Transition factors:
+        - Presence of hazards (to Aggressive)
+        - Absence of tech items/objects (to Silly)
+        - Random chance
+        """
+        # Check for hazards (transition to Aggressive)
+        if hasattr(npc.location, 'hazards') and npc.location.hazards:
+            return random.random() < 0.6  # 60% chance to become aggressive when hazards present
+        
+        # Check for enemy gang members (transition to Aggressive)
+        if hasattr(npc, 'gang'):
+            enemy_gang_members = [other for other in npc.location.npcs 
+                                 if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive]
+            if enemy_gang_members:
+                return random.random() < 0.7  # 70% chance to become aggressive when enemies present
+        
+        # Check if tech items/objects are absent (transition to Silly)
+        tech_items = [item for item in npc.items 
+                     if hasattr(item, 'is_electronic') and item.is_electronic]
+        
+        electronic_objects = [obj for obj in npc.location.objects 
+                            if hasattr(obj, 'is_electronic') and obj.is_electronic]
+        
+        if not tech_items and not electronic_objects:
+            return random.random() < 0.8  # 80% chance to become silly when no tech is available
+        
+        # Random chance to change state (10%)
+        return random.random() < 0.1
+
+
+# Gardening State
+class GardeningState(NPCState):
+    """
+    Represents a gardening-focused behavior state where NPCs engage in
+    planting, watering, harvesting, and other garden-related activities.
+    """
+    def update(self, npc, game):
+        # Skip dead NPCs
+        if not npc.is_alive:
+            return None
+            
+        # Check for effects that affect behavior
+        if hasattr(npc, 'active_effects'):
+            for effect in npc.active_effects:
+                # Check for hallucination effect
+                if isinstance(effect, HallucinationEffect) or (hasattr(effect, 'get_hallucination_message') and hasattr(effect, 'affects_combat') and effect.affects_combat()):
+                    return f"{npc.name} {effect.get_hallucination_message()}."
+                
+                # Check for confusion effect
+                elif isinstance(effect, ConfusionEffect) or (hasattr(effect, 'get_confusion_message') and hasattr(effect, 'affects_combat')):
+                    if effect.affects_combat():
+                        return f"{npc.name} {effect.get_confusion_message()}."
+        
+        # Choose a gardening behavior
+        behaviors = [
+            self._planting_behavior,
+            self._watering_behavior,
+            self._harvesting_behavior,
+            self._garden_maintenance
+        ]
+        
+        # Weight the behaviors
+        weights = [0.4, 0.3, 0.2, 0.1]
+        
+        # Choose a behavior based on weights
+        behavior = random.choices(behaviors, weights=weights)[0]
+        return behavior(npc, game)
+    
+    def _planting_behavior(self, npc, game):
+        """Implement planting behavior for NPCs."""
+        # Check if NPC has seeds
+        seeds = [item for item in npc.items if hasattr(item, 'crop_type')]
+        if seeds and hasattr(npc.location, 'objects'):
+            soil_plots = [obj for obj in npc.location.objects if hasattr(obj, 'add_plant')]
+            if soil_plots:
+                soil = random.choice(soil_plots)
+                seed = random.choice(seeds)
+                
+                # Create a plant from the seed
+                plant = Plant(
+                    f"{seed.crop_type} plant", 
+                    f"A young {seed.crop_type} plant.", 
+                    seed.crop_type, 
+                    seed.value * 2
+                )
+                
+                # Try to plant it
+                result = soil.add_plant(plant)
+                if result[0]:  # Successfully planted
+                    npc.items.remove(seed)
+                    return f"{npc.name} plants {seed.name} in the {soil.name}."
+        
+        # If no seeds or no soil, look for seeds
+        if hasattr(npc.location, 'items'):
+            potential_seeds = [item for item in npc.location.items 
+                             if hasattr(item, 'crop_type')]
+            
+            if potential_seeds:
+                seed = random.choice(potential_seeds)
+                npc.location.items.remove(seed)
+                npc.add_item(seed)
+                return f"{npc.name} picks up {seed.name} to plant later."
+        
+        # If no seeds available
+        return f"{npc.name} looks around for seeds to plant."
+    
+    def _watering_behavior(self, npc, game):
+        """Implement watering behavior for NPCs."""
+        # Check if there are soil plots with plants
+        if hasattr(npc.location, 'objects'):
+            soil_plots = [obj for obj in npc.location.objects 
+                         if isinstance(obj, SoilPlot) and obj.plants]
+            
+            if soil_plots:
+                soil = random.choice(soil_plots)
+                
+                # Check if NPC has a watering can
+                watering_cans = [item for item in npc.items 
+                               if hasattr(item, 'water_amount') and item.water_amount > 0]
+                
+                if watering_cans:
+                    can = random.choice(watering_cans)
+                    
+                    # Water the plants
+                    for plant in soil.plants:
+                        if hasattr(plant, 'water'):
+                            plant.water()
+                    
+                    # Reduce water in the can
+                    can.water_amount -= 1
+                    
+                    return f"{npc.name} waters the plants in the {soil.name} using their {can.name}."
+                
+                # If no watering can
+                return f"{npc.name} wishes they had a watering can for the plants in the {soil.name}."
+            
+            # If no soil plots with plants
+            return f"{npc.name} looks for plants to water."
+        
+        # If no objects in location
+        return f"{npc.name} looks around for a garden to tend to."
+    
+    def _harvesting_behavior(self, npc, game):
+        """Implement harvesting behavior for NPCs."""
+        # Check if there are soil plots with mature plants
+        if hasattr(npc.location, 'objects'):
+            soil_plots = [obj for obj in npc.location.objects 
+                         if isinstance(obj, SoilPlot) and obj.plants]
+            
+            if soil_plots:
+                soil = random.choice(soil_plots)
+                
+                # Check for mature plants
+                mature_plants = [plant for plant in soil.plants 
+                               if hasattr(plant, 'growth_stage') and plant.growth_stage >= 3]
+                
+                if mature_plants:
+                    plant = random.choice(mature_plants)
+                    
+                    # Harvest the plant
+                    if hasattr(soil, 'harvest_plant'):
+                        result = soil.harvest_plant(plant)
+                        if result[0] and result[2]:  # Successfully harvested with yield
+                            harvested_item = result[2]
+                            npc.add_item(harvested_item)
+                            return f"{npc.name} harvests {harvested_item.name} from the {soil.name}!"
+                    
+                    # If harvesting failed or no yield
+                    return f"{npc.name} tries to harvest from the {soil.name} but gets nothing."
+                
+                # If no mature plants
+                return f"{npc.name} checks the plants in the {soil.name}, but they're not ready for harvest yet."
+            
+            # If no soil plots with plants
+            return f"{npc.name} looks for plants to harvest."
+        
+        # If no objects in location
+        return f"{npc.name} looks around for a garden to harvest from."
+    
+    def _garden_maintenance(self, npc, game):
+        """Implement garden maintenance behavior for NPCs."""
+        return f"{npc.name} tends to the garden, removing weeds and checking the soil."
+    
+    def should_transition(self, npc, game):
+        """
+        Determine if the NPC should transition from Gardening to another state.
+        Transition factors:
+        - Presence of hazards (to Aggressive)
+        - Absence of garden plots (to Silly)
+        - Random chance
+        """
+        # Check for hazards (transition to Aggressive)
+        if hasattr(npc.location, 'hazards') and npc.location.hazards:
+            return random.random() < 0.6  # 60% chance to become aggressive when hazards present
+        
+        # Check for enemy gang members (transition to Aggressive)
+        if hasattr(npc, 'gang'):
+            enemy_gang_members = [other for other in npc.location.npcs 
+                                 if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive]
+            if enemy_gang_members:
+                return random.random() < 0.7  # 70% chance to become aggressive when enemies present
+        
+        # Check if garden plots are absent (transition to Silly)
+        if not hasattr(npc.location, 'objects') or not any(isinstance(obj, SoilPlot) for obj in npc.location.objects):
+            return random.random() < 0.8  # 80% chance to become silly when no garden is available
+        
+        # Random chance to change state (10%)
+        return random.random() < 0.1
+
+
+# State Manager for NPCs
+class NPCStateManager:
+    """
+    Manages the state transitions for NPCs, determining when to switch
+    between different behavior states based on environmental factors.
+    """
+    def __init__(self, default_state=None):
+        self.states = {
+            'silly': SillyState(),
+            'aggressive': AggressiveState(),
+            'tech': TechState(),
+            'gardening': GardeningState()
+        }
+        
+        # Set default state
+        self.default_state_name = 'silly' if default_state is None else default_state
+        self.current_state_name = self.default_state_name
+        self.current_state = self.states[self.current_state_name]
+        
+        # Track state transition cooldown
+        self.transition_cooldown = 0
+        self.min_cooldown = 2  # Minimum turns between state transitions
+    
+    def update(self, npc, game):
+        """
+        Update the NPC's state and behavior.
+        
+        Args:
+            npc: The NPC instance
+            game: The game instance
+            
+        Returns:
+            A message describing the NPC's action, or None if no action was taken
+        """
+        # Decrement cooldown
+        if self.transition_cooldown > 0:
+            self.transition_cooldown -= 1
+        
+        # Check for state transition if not on cooldown
+        if self.transition_cooldown == 0 and self.current_state.should_transition(npc, game):
+            self._transition_state(npc, game)
+        
+        # Update based on current state
+        return self.current_state.update(npc, game)
+    
+    def _transition_state(self, npc, game):
+        """
+        Transition to a new state based on environmental factors.
+        
+        Args:
+            npc: The NPC instance
+            game: The game instance
+        """
+        old_state_name = self.current_state_name
+        
+        # Determine the next state based on current state and environment
+        if self.current_state_name == 'silly':
+            # From Silly, can go to Aggressive, Tech, or Gardening
+            
+            # Check for hazards or enemies (high priority for Aggressive)
+            if (hasattr(npc.location, 'hazards') and npc.location.hazards) or \
+               (hasattr(npc, 'gang') and any(other for other in npc.location.npcs 
+                                           if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive)):
+                self.current_state_name = 'aggressive'
+            
+            # Check for tech items/objects (medium priority for Tech)
+            elif any(hasattr(item, 'is_electronic') and item.is_electronic for item in npc.items) or \
+                 any(hasattr(obj, 'is_electronic') and obj.is_electronic for obj in npc.location.objects):
+                self.current_state_name = 'tech'
+            
+            # Check for garden plots (medium priority for Gardening)
+            elif hasattr(npc.location, 'objects') and any(isinstance(obj, SoilPlot) for obj in npc.location.objects):
+                self.current_state_name = 'gardening'
+            
+            # Random choice if no clear factors
+            else:
+                self.current_state_name = random.choices(
+                    ['aggressive', 'tech', 'gardening'],
+                    weights=[0.2, 0.4, 0.4]  # Prefer tech and gardening over aggression
+                )[0]
+        
+        elif self.current_state_name == 'aggressive':
+            # From Aggressive, prefer to go to Silly when calmed down
+            self.current_state_name = 'silly'
+        
+        elif self.current_state_name == 'tech':
+            # From Tech, can go to Aggressive or Silly
+            
+            # Check for hazards or enemies (high priority for Aggressive)
+            if (hasattr(npc.location, 'hazards') and npc.location.hazards) or \
+               (hasattr(npc, 'gang') and any(other for other in npc.location.npcs 
+                                           if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive)):
+                self.current_state_name = 'aggressive'
+            else:
+                self.current_state_name = 'silly'
+        
+        elif self.current_state_name == 'gardening':
+            # From Gardening, can go to Aggressive or Silly
+            
+            # Check for hazards or enemies (high priority for Aggressive)
+            if (hasattr(npc.location, 'hazards') and npc.location.hazards) or \
+               (hasattr(npc, 'gang') and any(other for other in npc.location.npcs 
+                                           if hasattr(other, 'gang') and other.gang != npc.gang and other.is_alive)):
+                self.current_state_name = 'aggressive'
+            else:
+                self.current_state_name = 'silly'
+        
+        # Update the current state object
+        self.current_state = self.states[self.current_state_name]
+        
+        # Set cooldown to prevent rapid state changes
+        self.transition_cooldown = self.min_cooldown
+        
+        # Debug message (can be removed in production)
+        # print(f"NPC {npc.name} transitioned from {old_state_name} to {self.current_state_name}")
+    
+    def get_current_state_name(self):
+        """Get the name of the current state."""
+        return self.current_state_name
+    
+    def force_state(self, state_name):
+        """
+        Force the NPC into a specific state.
+        
+        Args:
+            state_name: The name of the state to force
+            
+        Returns:
+            True if successful, False if the state doesn't exist
+        """
+        if state_name in self.states:
+            self.current_state_name = state_name
+            self.current_state = self.states[state_name]
+            self.transition_cooldown = self.min_cooldown
+            return True
+        return False

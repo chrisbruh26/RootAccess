@@ -33,6 +33,9 @@ class Game:
         self.targeting_npcs = None
         self.in_targeting_mode = False
         
+        # Store command arguments for use by other methods
+        self.process_command_args = []
+        
         # Initialize command system
         self.commands = {
             # Movement commands
@@ -82,6 +85,9 @@ class Game:
             'run': {'handler': self.cmd_run_program, 'category': 'tech'},
             'recharge': {'handler': self.cmd_recharge, 'category': 'tech'},
             
+            # NPC state commands
+            'npc_states': {'handler': self.cmd_npc_states, 'category': 'interaction'},
+            
             # System commands
             'help': {'handler': self.cmd_help, 'category': 'system'},
             'quit': {'handler': self.cmd_quit, 'category': 'system'},
@@ -109,6 +115,9 @@ class Game:
         
         if not parts:
             return "Please enter a command."
+        
+        # Store the command parts for potential use by other methods
+        self.process_command_args = parts
         
         # Check if we're in targeting mode
         if self.targeting_weapon and self.targeting_npcs:
@@ -295,6 +304,17 @@ class Game:
             if hasattr(npc, 'health'):
                 info += f"\n  Health: {npc.health}/100"
                 
+            # Add state information if NPC uses the state system
+            if hasattr(npc, 'get_state') and npc.get_state() is not None:
+                state = npc.get_state()
+                state_desc = {
+                    'silly': "peaceful and playful",
+                    'aggressive': "hostile and dangerous",
+                    'tech': "focused on technology",
+                    'gardening': "tending to plants"
+                }.get(state, state)
+                info += f"\n  Current behavior: {state_desc}"
+                
             npc_info.append(info)
             
         return "NPCs in this area:\n" + "\n\n".join(npc_info)
@@ -418,12 +438,19 @@ class Game:
         - 'hack drone' - Deploy a hacking drone if you have one
         - 'hack [number]' - When drone is deployed, hack the NPC with the corresponding number
         - 'hack [number] [hack_type]' - Execute a specific hack type on the target
+        - 'hack [number] behavior [state]' - Change an NPC's behavior state
         
         Available hack types:
         - message: Send fake threatening messages to rival gangs
         - confusion: Hack target's device to cause confusion
         - item: Make the target drop or use an item
         - behavior: Temporarily change the target's behavior
+        
+        Available behavior states:
+        - silly: Make the NPC peaceful and playful
+        - aggressive: Make the NPC hostile and dangerous
+        - tech: Make the NPC focus on technology
+        - gardening: Make the NPC tend to plants
         """
         # Check if args are provided
         if args:
@@ -529,6 +556,16 @@ class Game:
 
     def cmd_help(self, args):
         """Show help information grouped by command category."""
+        # Check if user is asking for help with a specific command
+        if args:
+            cmd = args[0].lower()
+            if cmd in self.commands:
+                handler = self.commands[cmd]['handler']
+                doc = handler.__doc__ or "No documentation available."
+                return f"{cmd}: {doc}"
+            else:
+                return f"Unknown command: {cmd}. Type 'help' for a list of commands."
+        
         help_text = ["Available commands:"]
         
         # Group commands by category
@@ -544,6 +581,14 @@ class Game:
             help_text.append(f"\n{category.capitalize()} commands:")
             cmd_list = sorted(categories[category])
             help_text.append("  " + ", ".join(cmd_list))
+        
+        # Add special note about NPC state commands
+        help_text.append("\nNPC State System:")
+        help_text.append("  Use 'npc_states' to view the current behavior states of NPCs in the area.")
+        help_text.append("  Use 'hack [target number] behavior [state]' to hack an NPC's neural interface.")
+        help_text.append("  Available states: silly, aggressive, tech, gardening")
+        help_text.append("  Note: You need a deployed hacking drone to modify NPC behavior states.")
+        help_text.append("  Type 'help [command]' for more information about a specific command.")
         
         return "\n".join(help_text)
 
@@ -1005,6 +1050,35 @@ class Game:
             if self.player.health <= 0:
                 self.respawn_player()
                 continue
+
+
+    def cmd_npc_states(self, args):
+        """Show the current behavior states of NPCs in the area."""
+        if not self.player.current_area.npcs:
+            return "There are no NPCs in this area."
+            
+        # Filter for NPCs that use the state system
+        state_npcs = [npc for npc in self.player.current_area.npcs 
+                     if hasattr(npc, 'get_state') and npc.get_state() is not None]
+        
+        if not state_npcs:
+            return "There are no NPCs with behavior states in this area."
+            
+        npc_state_info = []
+        for npc in state_npcs:
+            state = npc.get_state()
+            state_desc = {
+                'silly': "peaceful and playful",
+                'aggressive': "hostile and dangerous",
+                'tech': "focused on technology",
+                'gardening': "tending to plants"
+            }.get(state, state)
+            
+            npc_state_info.append(f"{npc.name} is currently {state_desc}.")
+            
+        return "NPC States:\n" + "\n".join(npc_state_info)
+    
+
 
 
 # ----------------------------- #

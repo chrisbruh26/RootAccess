@@ -1,6 +1,8 @@
 """
 Grid-based Structure module for Root Access game.
 This module defines the GridStructure class for buildings and other structures on the grid.
+
+NOT in the template
 """
 
 class GridStructure:

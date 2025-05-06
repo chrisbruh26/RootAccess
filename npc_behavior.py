@@ -432,6 +432,12 @@ class NPCBehaviorCoordinator:
         if not npc.is_alive:
             return None
             
+        # Check for behavior override from hacking
+        if hasattr(npc, 'behavior_override_timer') and npc.behavior_override_timer > 0:
+            # Update the behavior override timer
+            if hasattr(npc, 'update_behavior_override'):
+                npc.update_behavior_override()
+            
         # Process GangMember specific behaviors
         if isinstance(npc, GangMember):
             # Update effects
@@ -481,7 +487,47 @@ class NPCBehaviorCoordinator:
                     target = random.choice(other_gang_members)
                     return npc.attack_npc(target)
         
-        # General NPC behaviors
+        # General NPC behaviors - check for behavior_type to influence actions
+        
+        # If NPC has a behavior_type, use it to influence their actions
+        if hasattr(npc, 'behavior_type'):
+            from npc_behavior import BehaviorType
+            
+            # Aggressive behavior - more likely to attack or threaten
+            if npc.behavior_type == BehaviorType.FIGHT:
+                # Find a target NPC in the same area
+                potential_targets = [other for other in npc.location.npcs 
+                                    if other != npc and other.is_alive]
+                                    
+                if potential_targets and random.random() < 0.7:  # 70% chance to be aggressive
+                    target = random.choice(potential_targets)
+                    
+                    # Check if they have a weapon
+                    weapons = [item for item in npc.items if hasattr(item, 'damage')]
+                    if weapons:
+                        weapon = random.choice(weapons)
+                        return f"{npc.name} threatens {target.name} with {weapon.name}!"
+                    else:
+                        return f"{npc.name} aggressively confronts {target.name}!"
+            
+            # Tech behavior - more likely to use tech items or hack
+            elif npc.behavior_type == BehaviorType.TECH:
+                tech_items = [item for item in npc.items if hasattr(item, 'is_electronic') and item.is_electronic]
+                if tech_items and random.random() < 0.8:  # 80% chance to use tech
+                    item = random.choice(tech_items)
+                    return f"{npc.name} fiddles with their {item.name}."
+                else:
+                    return f"{npc.name} scans the area with a small device."
+            
+            # Suspicious behavior - more likely to watch others or hide
+            elif npc.behavior_type == BehaviorType.SUSPICIOUS:
+                if random.random() < 0.7:  # 70% chance for suspicious behavior
+                    if npc.location.npcs and len(npc.location.npcs) > 1:
+                        other_npcs = [other for other in npc.location.npcs if other != npc]
+                        if other_npcs:
+                            target = random.choice(other_npcs)
+                            return f"{npc.name} watches {target.name} suspiciously."
+                    return f"{npc.name} looks around nervously, as if hiding something."
         
         # Chance to pick up items from the environment (30% chance)
         if hasattr(npc.location, 'items') and npc.location.items and random.random() < 0.3:
@@ -724,24 +770,41 @@ class NPCBehaviorCoordinator:
             return None
             
         # Group actions by type
-        effect_actions = []
         combat_actions = []
+        effect_actions = []
         other_actions = []
         
+        # Identify combat-related keywords for better categorization
+        combat_keywords = [
+            "attack", "damage", "defeat", "fight", "hostile", "punch", 
+            "kick", "shoot", "stab", "hit", "battle", "combat", "weapon",
+            "threatens", "ambush", "retaliate", "defend", "drag"
+        ]
+        
         for message in self.action_messages:
-            if "Several NPCs" in message or message.count(" and ") > 0:
-                effect_actions.append(message)
-            elif "attacks" in message.lower() or "damage" in message.lower():
+            # Check if the message contains any combat keywords
+            is_combat = any(keyword in message.lower() for keyword in combat_keywords)
+            
+            if is_combat:
                 combat_actions.append(message)
+            elif "Several NPCs" in message or message.count(" and ") > 0 or "hallucinate" in message.lower() or "confused" in message.lower():
+                effect_actions.append(message)
             else:
                 other_actions.append(message)
         
         # Combine each type of action with appropriate punctuation
+        # Combat actions first, then effects, then other actions
         summary_parts = []
+        
+        # Combat actions get priority and more detail
+        if combat_actions:
+            summary_parts.extend(self._combine_messages_with_punctuation(combat_actions, max_count=4))
+        
+        # Effect actions next
         if effect_actions:
             summary_parts.extend(self._combine_messages_with_punctuation(effect_actions))
-        if combat_actions:
-            summary_parts.extend(self._combine_messages_with_punctuation(combat_actions))
+        
+        # Other actions last and more summarized
         if other_actions:
             summary_parts.extend(self._combine_messages_with_punctuation(other_actions, max_count=3))
             

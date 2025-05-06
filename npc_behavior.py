@@ -1,839 +1,594 @@
+"""
+NPC Behavior module for Root Access game.
+This module defines NPC behavior patterns and AI.
+"""
+
 import random
-import json
-import os
-from effects import Effect, HallucinationEffect, ConfusionEffect
-from objects import VendingMachine
+from enum import Enum
 
-# ----------------------------- #
-# NPC BEHAVIOR SYSTEM           #
-# ----------------------------- #
-
-class NPC:
-    def __init__(self, name, description):
-        self.name = name
-        self.description = description
-        self.relationship = 0
-        self.items = []
-        self.location = None
-        self.is_alive = True
-        self.actions_this_turn = 0  # Tracks the number of actions this NPC has taken in the current turn
-
-    def reset_actions(self):
-        """Reset the actions counter for the NPC at the start of a new turn."""
-        self.actions_this_turn = 0
-
-    def add_item(self, item):
-        """Add an item to NPC's inventory, checking if it has the necessary attributes of an Item."""
-        # Instead of using isinstance, check for essential Item attributes
-        # This avoids circular import issues
-        if hasattr(item, 'name') and hasattr(item, 'description'):
-            self.items.append(item)
-            return True
-        else:
-            # For debugging - this should rarely happen in normal gameplay
-            print(f"Warning: {self.name} tried to add an invalid object to inventory: {item}")
-            return False
-
-    def remove_item(self, item_name):
-        item = next((i for i in self.items if i.name.lower() == item_name.lower()), None)
-        if item:
-            self.items.remove(item)
-
-    def apply_hazard_effect(self, hazard):
-        """Default hazard effect application for NPCs that do not have specific implementation."""
-        # By default, NPCs are unaffected by hazards
-        return "nothing happens" #f"{self.name} is unaffected by the {hazard.name}."
-
-
-class Civilian(NPC):
-    def __init__(self, name, description):
-        super().__init__(name, description)
-        self.is_injured = False
-        self.is_arrested = False
-        self.is_fighting = False # two NPCs will be randomly selected to fight each other during a random event
-        self.emotion = None # none if feeling neutral, can be confused if weird chaos events happen
-        self.needs_help = False # random events might occur where NPC needs help, such as being mugged
-
-
-# Scalable Gang class to manage gang name and members
-class Gang:
-    def __init__(self, name):
-        self.name = name
-        self.members = []
-
-    def add_member(self, gang_member):
-        self.members.append(gang_member)
-
-    def remove_member(self, gang_member):
-        if gang_member in self.members:
-            self.members.remove(gang_member)
-
-    def list_members(self):
-        return [member.name for member in self.members]
-
-
-# Scalable GangMember class inheriting from NPC
-class GangMember(NPC):
-    def __init__(self, name, description, gang):
-        super().__init__(name, description)
-        self.gang = gang
-        self.health = 100
-        self.is_alive = True
-        self.detection_chance = 0.05  # 5% base chance to detect player
-        self.has_detected_player = False
-        self.detection_cooldown = 0
-        self.active_effects = []  # List of active effects
-        self.hazard_resistance = 50  # Base 50% chance to resist hazard effects
-        self.gang.add_member(self)
-
-    def update_effects(self):
-        """Update active effects and remove expired ones."""
-        expired_effects = []
-        for effect in self.active_effects:
-            if effect.update():  # Returns True if expired
-                expired_effects.append(effect)
-        
-        # Remove expired effects
-        for effect in expired_effects:
-            self.active_effects.remove(effect)
-            
-        return expired_effects
-
-    def die(self):
-        if self.health <= 0 and self.is_alive:
-            self.is_alive = False
-            self.gang.remove_member(self)
-            return f"{self.name} has been defeated!"
-        return None
-
-    def attack_player(self, player):
-        # If player is hidden, can't attack
-        if player.hidden:
-            return None
-            
-        # Check if NPC is hallucinating - can't attack while hallucinating
-        if any(hasattr(effect, 'affects_combat') and effect.affects_combat() for effect in self.active_effects):
-            # Get a hallucination message if available
-            for effect in self.active_effects:
-                if hasattr(effect, 'get_combat_prevention_message'):
-                    return f"{self.name} {effect.get_combat_prevention_message()} instead of attacking you."
-                elif hasattr(effect, 'get_hallucination_message'):
-                    return f"{self.name} {effect.get_hallucination_message()} instead of attacking you."
-            return f"{self.name} is too distracted to attack you."
-        
-        # Check if this gang has detected the player
-        if self.gang not in player.detected_by:
-            # Can't attack if haven't detected
-            return None
-            
-        # Simple combat logic
-        damage = random.randint(5, 15)
-        player.health -= damage
-        return f"{self.name} attacks you for {damage} damage!"
-
-    def attack_npc(self, target_npc):
-        # Simple NPC-to-NPC combat
-        if not target_npc.is_alive or not self.is_alive:
-            return None
-            
-        # Check if NPC is hallucinating - can't attack while hallucinating
-        if any(hasattr(effect, 'affects_combat') and effect.affects_combat() for effect in self.active_effects):
-            # Get a hallucination message if available
-            for effect in self.active_effects:
-                if hasattr(effect, 'get_combat_prevention_message'):
-                    return f"{self.name} {effect.get_combat_prevention_message()} instead of attacking {target_npc.name}."
-                elif hasattr(effect, 'get_hallucination_message'):
-                    return f"{self.name} {effect.get_hallucination_message()} instead of attacking {target_npc.name}."
-            return f"{self.name} is too distracted to attack {target_npc.name}."
-        
-        # check type of each npc and compare, only allowing them to attack each other if different types, like different gang
-        
-
-        # if npc is not a gang member, or target npc is not a gang member, return None. elif they're both gang members but same gang, return None
-        if not isinstance(target_npc, GangMember):
-            return None
-        elif self.gang.name == target_npc.gang.name:
-            return None
-
-            
-        damage = random.randint(5, 15)
-        
-        # Apply damage to target
-        if hasattr(target_npc, 'health'):
-            target_npc.health -= damage
-            
-            # Check if target died
-            if target_npc.health <= 0:
-                target_npc.is_alive = False
-                if hasattr(target_npc, 'gang'):
-                    target_npc.gang.remove_member(target_npc)
-                return f"{self.name} attacks {target_npc.name} for {damage} damage, defeating them!"
-            
-            return f"{self.name} attacks {target_npc.name} for {damage} damage!"
-        else:
-            # For NPCs without health attribute
-            target_npc.is_alive = False
-            return f"{self.name} attacks and defeats {target_npc.name}!"
-
-    def detect_player(self, player, game):
-        """Attempt to detect the player based on detection chance."""
-        # Skip detection if already detected or on cooldown
-        if self.has_detected_player or self.detection_cooldown > 0:
-            return None
-            
-        # Check if NPC is hallucinating - can't detect player while hallucinating
-        if any(hasattr(effect, 'affects_combat') and effect.affects_combat() for effect in self.active_effects):
-            # Get a hallucination message if available
-            for effect in self.active_effects:
-                if hasattr(effect, 'get_hallucination_message'):
-                    return f"{self.name} {effect.get_hallucination_message()}."
-            return None
-        
-        # If player is hidden, drastically reduce detection chance
-        if player.hidden:
-            # Calculate stealth bonus from hiding spot
-            stealth_bonus = 0
-            if player.hiding_spot:
-                stealth_bonus = player.hiding_spot.stealth_bonus
-                
-            # Almost impossible to detect when hidden
-            modified_detection_chance = self.detection_chance * (1 - stealth_bonus)
-            
-            # Very small chance to detect even when hidden
-            if random.random() < modified_detection_chance * 0.1:  # 10% of already reduced chance
-                self.has_detected_player = True
-                player.detected_by.add(self.gang)
-                
-                # Force player out of hiding
-                player.hidden = False
-                if player.hiding_spot:
-                    player.hiding_spot.is_occupied = False
-                    player.hiding_spot.occupant = None
-                player.hiding_spot = None
-                
-                # Set a cooldown before the NPC can detect again if the player escapes
-                self.detection_cooldown = 3
-                
-                return f"{self.name} discovers your hiding spot and drags you out!"
-            
-            # Most of the time, hidden players aren't detected
-            return None
-            
-        # Base detection chance for non-hidden players
-        detection_roll = random.random()
-        
-        if detection_roll < self.detection_chance:
-            self.has_detected_player = True
-            player.detected_by.add(self.gang)
-            
-            # Set a cooldown before the NPC can detect again if the player escapes
-            self.detection_cooldown = 3
-            
-            return f"{self.name} spots you and becomes hostile!"
-        
-        return None
-
-
-# ----------------------------- #
-# NPC BEHAVIOR MANAGEMENT       #
-# ----------------------------- #
-
-class BehaviorType:
-    """Types of NPC behaviors."""
-    IDLE = "idle"
-    TALK = "talk"
-    FIGHT = "fight"
-    USE_ITEM = "use_item"
-    GARDENING = "gardening"
-    GIFT = "gift"
-    TECH = "tech"
-    SUSPICIOUS = "suspicious"
+class BehaviorType(Enum):
+    """Enum for different NPC behavior types."""
+    IDLE = 0
+    PATROL = 1
+    FOLLOW = 2
+    FLEE = 3
+    ATTACK = 4
+    DISTRACTED = 5
 
 
 class BehaviorSettings:
-    """Global settings for NPC behavior frequencies."""
-    def __init__(self):
-        # Default behavior weights
-        self.default_weights = {
-            BehaviorType.IDLE: 0.2,     # 20% chance for idle behavior
-            BehaviorType.TALK: 0.3,     # 30% chance for talking
-            BehaviorType.FIGHT: 0.1,    # 10% chance for fighting
-            BehaviorType.USE_ITEM: 0.3, # 30% chance for using items
-            BehaviorType.GARDENING: 0.3,# 10% chance for gardening
-            BehaviorType.GIFT: 0.0,     # 0% base chance for gifting (boosted by effects)
-        }
-        
-        # Behavior frequency multipliers (1.0 = normal frequency, 0.5 = half frequency, 0.0 = disabled)
-        self.frequency_multipliers = {
-            BehaviorType.IDLE: 1.0,
-            BehaviorType.TALK: 1.0,
-            BehaviorType.FIGHT: 0.1,
-            BehaviorType.USE_ITEM: 1.0,
-            BehaviorType.GARDENING: 5.0,
-            BehaviorType.GIFT: 1.0,
-        }
-        
-        # Behavior cooldowns (in turns)
-        self.cooldowns = {
-            BehaviorType.IDLE: 1,      # 1 turn between idle behaviors
-            BehaviorType.TALK: 2,      # 2 turns between talking
-            BehaviorType.FIGHT: 3,     # 3 turns between fighting
-            BehaviorType.USE_ITEM: 1,  # 1 turn between using items
-            BehaviorType.GARDENING: 2, # 2 turns between gardening activities
-            BehaviorType.GIFT: 5,      # 5 turns between gifting
-        }
-        
-        # Last turn each behavior was performed (per NPC)
-        self.last_behavior_turn = {}
-        
-        # Global switch to disable all NPC behaviors
-        self.npcs_enabled = True
+    """Settings for NPC behavior."""
     
-    def get_adjusted_weights(self, npc):
-        """Get behavior weights adjusted by frequency multipliers."""
-        # Start with default weights
-        weights = self.default_weights.copy()
-        
-        # Apply frequency multipliers
-        for behavior_type, multiplier in self.frequency_multipliers.items():
-            if behavior_type in weights:
-                weights[behavior_type] *= multiplier
-        
-        return weights
+    def __init__(self, behavior_type=BehaviorType.IDLE, target=None, duration=None, path=None):
+        """Initialize BehaviorSettings object."""
+        self.behavior_type = behavior_type
+        self.target = target  # Target object or coordinates
+        self.duration = duration  # How long the behavior lasts (in turns)
+        self.path = path  # List of coordinates for patrol paths
+        self.current_path_index = 0
+
+
+class Gang:
+    """Represents a gang in the game."""
     
-    def can_perform_behavior(self, npc, behavior_type, current_turn):
-        """Check if an NPC can perform a behavior based on cooldowns."""
-        # Get the NPC's last behavior times
-        npc_id = id(npc)
-        if npc_id not in self.last_behavior_turn:
-            self.last_behavior_turn[npc_id] = {}
-        
-        # If behavior has never been performed, allow it
-        if behavior_type not in self.last_behavior_turn[npc_id]:
+    def __init__(self, name):
+        """Initialize a Gang object."""
+        self.name = name
+        self.members = []
+        self.territory = None
+        self.rival_gangs = []
+        self.member_names = []
+    
+    def add_member(self, member):
+        """Add a member to the gang."""
+        self.members.append(member)
+        member.gang = self
+    
+    def remove_member(self, member):
+        """Remove a member from the gang."""
+        if member in self.members:
+            self.members.remove(member)
+            member.gang = None
+    
+    def is_rival(self, other_gang):
+        """Check if another gang is a rival."""
+        return other_gang in self.rival_gangs
+    
+    def add_rival(self, other_gang):
+        """Add a rival gang."""
+        if other_gang not in self.rival_gangs:
+            self.rival_gangs.append(other_gang)
+            if self not in other_gang.rival_gangs:
+                other_gang.add_rival(self)
+
+
+class NPC:
+    """Base class for all NPCs in the game."""
+    
+    def __init__(self, name, description):
+        """Initialize an NPC object."""
+        self.name = name
+        self.description = description
+        self.items = []
+        self.x = None
+        self.y = None
+        self.location = None
+        self.behavior = BehaviorSettings()
+        self.active_effects = {}
+        self.is_alive = True
+        self.health = 100
+        self.detection_ability = 1.0  # Base detection ability
+    
+    def place_on_grid(self, grid, x, y):
+        """Place the NPC on a grid at the specified coordinates."""
+        if grid.place_object(self, x, y):
+            self.x = x
+            self.y = y
             return True
-        
-        # Check if cooldown has elapsed
-        cooldown = self.cooldowns.get(behavior_type, 0)
-        last_turn = self.last_behavior_turn[npc_id].get(behavior_type, 0)
-        
-        return (current_turn - last_turn) >= cooldown
+        return False
     
-    def record_behavior(self, npc, behavior_type, current_turn):
-        """Record that an NPC performed a behavior."""
-        npc_id = id(npc)
-        if npc_id not in self.last_behavior_turn:
-            self.last_behavior_turn[npc_id] = {}
+    def move(self, dx, dy, grid):
+        """Move the NPC by the specified delta."""
+        new_x = self.x + dx
+        new_y = self.y + dy
         
-        self.last_behavior_turn[npc_id][behavior_type] = current_turn
+        # Check if the new position is valid
+        if not grid.is_valid_coordinate(new_x, new_y):
+            return False
+        
+        # Check if the new position is occupied
+        if grid.is_cell_occupied(new_x, new_y):
+            return False
+        
+        # Move the NPC
+        grid.remove_object(self.x, self.y)
+        grid.place_object(self, new_x, new_y)
+        self.x = new_x
+        self.y = new_y
+        
+        return True
     
-    def set_frequency(self, behavior_type, frequency):
-        """Set the frequency multiplier for a behavior type."""
-        if behavior_type in self.frequency_multipliers:
-            self.frequency_multipliers[behavior_type] = frequency
+    def move_towards(self, target_x, target_y, grid):
+        """Move the NPC towards the target coordinates."""
+        # Calculate direction
+        dx = 0
+        dy = 0
+        
+        if target_x > self.x:
+            dx = 1
+        elif target_x < self.x:
+            dx = -1
+        
+        if target_y > self.y:
+            dy = 1
+        elif target_y < self.y:
+            dy = -1
+        
+        # Try to move in the calculated direction
+        if dx != 0 and dy != 0:
+            # Diagonal movement - try horizontal first, then vertical
+            if random.random() < 0.5:
+                if not self.move(dx, 0, grid):
+                    self.move(0, dy, grid)
+            else:
+                if not self.move(0, dy, grid):
+                    self.move(dx, 0, grid)
+        else:
+            # Straight movement
+            self.move(dx, dy, grid)
     
-    def set_cooldown(self, behavior_type, cooldown):
-        """Set the cooldown for a behavior type."""
-        if behavior_type in self.cooldowns:
-            self.cooldowns[behavior_type] = cooldown
+    def move_away_from(self, target_x, target_y, grid):
+        """Move the NPC away from the target coordinates."""
+        # Calculate direction (opposite of move_towards)
+        dx = 0
+        dy = 0
+        
+        if target_x > self.x:
+            dx = -1
+        elif target_x < self.x:
+            dx = 1
+        
+        if target_y > self.y:
+            dy = -1
+        elif target_y < self.y:
+            dy = 1
+        
+        # Try to move in the calculated direction
+        if dx != 0 and dy != 0:
+            # Diagonal movement - try horizontal first, then vertical
+            if random.random() < 0.5:
+                if not self.move(dx, 0, grid):
+                    self.move(0, dy, grid)
+            else:
+                if not self.move(0, dy, grid):
+                    self.move(dx, 0, grid)
+        else:
+            # Straight movement
+            self.move(dx, dy, grid)
+    
+    def update_behavior(self, player):
+        """Update the NPC's behavior based on the player and environment."""
+        # Check if the NPC is affected by any effects
+        if "Confusion" in self.active_effects:
+            # Confused NPCs move randomly
+            self.behavior.behavior_type = BehaviorType.IDLE
+            return
+        
+        if "Hallucination" in self.active_effects:
+            # Hallucinating NPCs might attack randomly
+            if random.random() < 0.2:
+                self.behavior.behavior_type = BehaviorType.ATTACK
+                self.behavior.target = player
+            else:
+                self.behavior.behavior_type = BehaviorType.IDLE
+            return
+        
+        # Default behavior is to idle
+        self.behavior.behavior_type = BehaviorType.IDLE
+    
+    def execute_behavior(self, grid):
+        """Execute the NPC's current behavior."""
+        if self.behavior.behavior_type == BehaviorType.IDLE:
+            # 20% chance to move randomly
+            if random.random() < 0.2:
+                dx = random.choice([-1, 0, 1])
+                dy = random.choice([-1, 0, 1])
+                self.move(dx, dy, grid)
+        
+        elif self.behavior.behavior_type == BehaviorType.PATROL:
+            if self.behavior.path and len(self.behavior.path) > 0:
+                # Move along the patrol path
+                target = self.behavior.path[self.behavior.current_path_index]
+                self.move_towards(target[0], target[1], grid)
+                
+                # Check if we've reached the target
+                if self.x == target[0] and self.y == target[1]:
+                    # Move to the next point in the path
+                    self.behavior.current_path_index = (self.behavior.current_path_index + 1) % len(self.behavior.path)
+        
+        elif self.behavior.behavior_type == BehaviorType.FOLLOW:
+            if self.behavior.target:
+                # Get target coordinates
+                target_x = self.behavior.target.x if hasattr(self.behavior.target, 'x') else self.behavior.target[0]
+                target_y = self.behavior.target.y if hasattr(self.behavior.target, 'y') else self.behavior.target[1]
+                
+                # Move towards the target
+                self.move_towards(target_x, target_y, grid)
+        
+        elif self.behavior.behavior_type == BehaviorType.FLEE:
+            if self.behavior.target:
+                # Get target coordinates
+                target_x = self.behavior.target.x if hasattr(self.behavior.target, 'x') else self.behavior.target[0]
+                target_y = self.behavior.target.y if hasattr(self.behavior.target, 'y') else self.behavior.target[1]
+                
+                # Move away from the target
+                self.move_away_from(target_x, target_y, grid)
+        
+        elif self.behavior.behavior_type == BehaviorType.ATTACK:
+            if self.behavior.target:
+                # Get target coordinates
+                target_x = self.behavior.target.x if hasattr(self.behavior.target, 'x') else self.behavior.target[0]
+                target_y = self.behavior.target.y if hasattr(self.behavior.target, 'y') else self.behavior.target[1]
+                
+                # Check if we're adjacent to the target
+                if abs(self.x - target_x) <= 1 and abs(self.y - target_y) <= 1:
+                    # Attack the target
+                    if hasattr(self, 'attack') and hasattr(self.behavior.target, 'take_damage'):
+                        self.attack(self.behavior.target)
+                else:
+                    # Move towards the target
+                    self.move_towards(target_x, target_y, grid)
+        
+        elif self.behavior.behavior_type == BehaviorType.DISTRACTED:
+            # Do nothing while distracted
+            pass
+    
+    def update_effects(self):
+        """Update active effects and remove expired ones."""
+        expired_effects = []
+        for effect_name, turns_remaining in list(self.active_effects.items()):
+            self.active_effects[effect_name] -= 1
+            if self.active_effects[effect_name] <= 0:
+                expired_effects.append(effect_name)
+        
+        # Remove expired effects
+        for effect_name in expired_effects:
+            del self.active_effects[effect_name]
+        
+        return expired_effects
+    
+    def take_damage(self, damage):
+        """Take damage and update health."""
+        self.health -= damage
+        if self.health <= 0:
+            self.health = 0
+            self.die()
+    
+    def die(self):
+        """Handle the NPC's death."""
+        self.is_alive = False
+        self.health = 0
+        
+        # Drop all items
+        if hasattr(self, 'location') and self.location:
+            for item in self.items:
+                item.x = self.x
+                item.y = self.y
+                self.location.add_item(item)
+            self.items = []
+    
+    def talk(self, player):
+        """Talk to the player."""
+        return True, f"{self.name} says: Hello there!"
+    
+    def distract(self):
+        """Distract the NPC."""
+        self.behavior.behavior_type = BehaviorType.DISTRACTED
+        self.behavior.duration = 3  # Distracted for 3 turns
+        return True
+    
+    def distract_with_decoy(self, decoy_x, decoy_y):
+        """Distract the NPC with a decoy."""
+        self.behavior.behavior_type = BehaviorType.FOLLOW
+        self.behavior.target = (decoy_x, decoy_y)
+        self.behavior.duration = 5  # Follow the decoy for 5 turns
+        return True
 
 
-# Create a global instance of BehaviorSettings
-behavior_settings = BehaviorSettings()
+class Civilian(NPC):
+    """A civilian NPC."""
+    
+    def __init__(self, name, description):
+        """Initialize a Civilian object."""
+        super().__init__(name, description)
+        self.fear_level = 0  # 0-100, affects behavior
+    
+    def update_behavior(self, player):
+        """Update the civilian's behavior based on the player and environment."""
+        # Check if the civilian is affected by any effects
+        if "Confusion" in self.active_effects or "Hallucination" in self.active_effects:
+            super().update_behavior(player)
+            return
+        
+        # Check if the player is nearby
+        if player and hasattr(player, 'x') and hasattr(player, 'y'):
+            distance = max(abs(self.x - player.x), abs(self.y - player.y))
+            
+            # If the player is armed and close, flee
+            has_weapon = any(hasattr(item, 'damage') for item in player.inventory)
+            
+            if has_weapon and distance <= 3:
+                self.fear_level = min(100, self.fear_level + 20)
+            elif distance <= 1:
+                self.fear_level = min(100, self.fear_level + 10)
+            else:
+                self.fear_level = max(0, self.fear_level - 5)
+            
+            # Determine behavior based on fear level
+            if self.fear_level >= 70:
+                self.behavior.behavior_type = BehaviorType.FLEE
+                self.behavior.target = player
+            elif self.fear_level >= 30:
+                # Move randomly, avoiding the player
+                self.behavior.behavior_type = BehaviorType.IDLE
+            else:
+                # Normal behavior - patrol or idle
+                if random.random() < 0.3:
+                    self.behavior.behavior_type = BehaviorType.PATROL
+                    
+                    # Create a random patrol path if none exists
+                    if not self.behavior.path:
+                        grid_width = self.location.grid.width if hasattr(self.location, 'grid') else 20
+                        grid_height = self.location.grid.height if hasattr(self.location, 'grid') else 20
+                        
+                        self.behavior.path = [
+                            (random.randint(0, grid_width - 1), random.randint(0, grid_height - 1))
+                            for _ in range(3)
+                        ]
+                else:
+                    self.behavior.behavior_type = BehaviorType.IDLE
+        else:
+            # Default behavior
+            super().update_behavior(player)
+    
+    def talk(self, player):
+        """Talk to the player."""
+        # Different responses based on fear level
+        if self.fear_level >= 70:
+            return True, f"{self.name} says: Please don't hurt me! I'll do whatever you want!"
+        elif self.fear_level >= 30:
+            return True, f"{self.name} says: Um, hello... Can I help you with something?"
+        else:
+            greetings = [
+                f"Hello there! Nice day, isn't it?",
+                f"Oh, hi! I'm {self.name}. What's your name?",
+                f"Hey! How's it going?",
+                f"Well met, traveler!",
+                f"Greetings! What brings you to these parts?"
+            ]
+            return True, f"{self.name} says: {random.choice(greetings)}"
+
+
+class GangMember(NPC):
+    """A gang member NPC."""
+    
+    def __init__(self, name, description):
+        """Initialize a GangMember object."""
+        super().__init__(name, description)
+        self.gang = None
+        self.aggression = random.randint(30, 70)  # 0-100, affects behavior
+        self.status = "alive"  # "alive", "knocked out", "dead"
+    
+    def update_behavior(self, player):
+        """Update the gang member's behavior based on the player and environment."""
+        # Check if the gang member is affected by any effects
+        if "Confusion" in self.active_effects or "Hallucination" in self.active_effects:
+            super().update_behavior(player)
+            return
+        
+        # Check if the gang member is knocked out or dead
+        if self.status != "alive":
+            self.behavior.behavior_type = BehaviorType.IDLE
+            return
+        
+        # Check for rival gang members in the area
+        if hasattr(self, 'location') and hasattr(self.location, 'gang_members'):
+            rivals = [
+                member for member in self.location.gang_members
+                if member.gang and self.gang and member.gang != self.gang and member.status == "alive"
+            ]
+            
+            if rivals:
+                # Attack a random rival
+                target = random.choice(rivals)
+                self.behavior.behavior_type = BehaviorType.ATTACK
+                self.behavior.target = target
+                return
+        
+        # Check if the player is nearby and not hidden
+        if player and hasattr(player, 'x') and hasattr(player, 'y') and not player.hidden:
+            distance = max(abs(self.x - player.x), abs(self.y - player.y))
+            
+            # If the player is close, react based on aggression
+            if distance <= 5:
+                if self.aggression >= 70:
+                    # Highly aggressive - attack the player
+                    self.behavior.behavior_type = BehaviorType.ATTACK
+                    self.behavior.target = player
+                elif self.aggression >= 30:
+                    # Moderately aggressive - follow the player
+                    self.behavior.behavior_type = BehaviorType.FOLLOW
+                    self.behavior.target = player
+                else:
+                    # Not very aggressive - patrol or idle
+                    if random.random() < 0.5:
+                        self.behavior.behavior_type = BehaviorType.PATROL
+                        
+                        # Create a random patrol path if none exists
+                        if not self.behavior.path:
+                            grid_width = self.location.grid.width if hasattr(self.location, 'grid') else 20
+                            grid_height = self.location.grid.height if hasattr(self.location, 'grid') else 20
+                            
+                            self.behavior.path = [
+                                (random.randint(0, grid_width - 1), random.randint(0, grid_height - 1))
+                                for _ in range(3)
+                            ]
+                    else:
+                        self.behavior.behavior_type = BehaviorType.IDLE
+            else:
+                # Default behavior - patrol or idle
+                if random.random() < 0.7:
+                    self.behavior.behavior_type = BehaviorType.PATROL
+                    
+                    # Create a random patrol path if none exists
+                    if not self.behavior.path:
+                        grid_width = self.location.grid.width if hasattr(self.location, 'grid') else 20
+                        grid_height = self.location.grid.height if hasattr(self.location, 'grid') else 20
+                        
+                        self.behavior.path = [
+                            (random.randint(0, grid_width - 1), random.randint(0, grid_height - 1))
+                            for _ in range(3)
+                        ]
+                else:
+                    self.behavior.behavior_type = BehaviorType.IDLE
+        else:
+            # Default behavior
+            super().update_behavior(player)
+    
+    def talk(self, player):
+        """Talk to the player."""
+        # Different responses based on aggression
+        if self.aggression >= 70:
+            threats = [
+                f"What are you looking at? Get lost before I make you regret it!",
+                f"You're in {self.gang.name if self.gang else 'our'} territory now. Better watch yourself.",
+                f"I don't like your face. Maybe I should rearrange it for you.",
+                f"You picked the wrong person to talk to. Back off!",
+                f"*spits on the ground* I ain't got nothing to say to you."
+            ]
+            return True, f"{self.name} says: {random.choice(threats)}"
+        elif self.aggression >= 30:
+            warnings = [
+                f"You better have a good reason for talking to me.",
+                f"What do you want? Make it quick.",
+                f"I'm busy. Don't waste my time.",
+                f"*eyes you suspiciously* Yeah?",
+                f"You're not from around here, are you? What's your business?"
+            ]
+            return True, f"{self.name} says: {random.choice(warnings)}"
+        else:
+            neutral = [
+                f"Hey there. What can I do for you?",
+                f"*nods* What's up?",
+                f"You looking for something?",
+                f"*looks around nervously* You shouldn't be seen talking to me.",
+                f"Keep it down. What do you need?"
+            ]
+            return True, f"{self.name} says: {random.choice(neutral)}"
+    
+    def attack(self, target):
+        """Attack a target."""
+        damage = random.randint(5, 15)
+        
+        if hasattr(target, 'take_damage'):
+            target.take_damage(damage)
+            
+            # Check if the target is defeated
+            if hasattr(target, 'health') and target.health <= 0:
+                if hasattr(target, 'die'):
+                    target.die()
+                return True, f"{self.name} attacks {target.name} for {damage} damage! {target.name} has been defeated!"
+            
+            return True, f"{self.name} attacks {target.name} for {damage} damage! {target.name}'s health: {target.health}/100"
+        
+        return False, f"{self.name} can't attack {target.name}."
+    
+    def knockout(self, player):
+        """Knock out the gang member."""
+        self.status = "knocked out"
+        
+        # Drop all items
+        if hasattr(self, 'location') and self.location:
+            for item in self.items:
+                item.x = self.x
+                item.y = self.y
+                self.location.add_item(item)
+            self.items = []
+        
+        return True, f"{self.name} has been knocked out!"
+    
+    def gangfight(self):
+        """Initiate a gang fight with rival gang members."""
+        # Check if there are rival gang members in the area
+        if not hasattr(self, 'location') or not hasattr(self.location, 'gang_members'):
+            return False, "No gang members to fight."
+        
+        rivals = [
+            member for member in self.location.gang_members
+            if member.gang and self.gang and member.gang != self.gang and member.status == "alive"
+        ]
+        
+        if not rivals:
+            return False, "No rival gang members to fight."
+        
+        # Attack a random rival
+        target = random.choice(rivals)
+        return self.attack(target)
 
 
 class NPCBehaviorCoordinator:
-    """Manages NPC behaviors and enforces limits on actions per turn."""
-    def __init__(self, max_npc_actions_per_turn=10, max_actions_per_npc=2):
-        self.max_npc_actions_per_turn = max_npc_actions_per_turn
-        self.max_actions_per_npc = max_actions_per_npc
-        self.npc_cooldowns = {}  # Tracks cooldowns for specific NPC behaviors
-        self.current_turn = 0
-        self.action_messages = []  # Stores NPC action messages for the current turn
-        
-        # Load NPC actions from JSON file
-        self.actions_data = self._load_actions_data()
-
-    def _load_actions_data(self):
-        """Load NPC actions from JSON file."""
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            file_path = os.path.join(script_dir, 'npc_actions.json')
-            with open(file_path, 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            # Return default actions if file not found or invalid
-            return {
-                "idle": {
-                    "singular": ["stands around looking bored", "checks their phone"],
-                    "plural": ["stand around looking bored", "check their phones"]
-                },
-                "talk": {
-                    "singular": ["talks with someone nearby", "whispers something"],
-                    "plural": ["talk with others", "whisper something"]
-                },
-                "fight": {
-                    "singular": ["looks for trouble", "clenches their fists"],
-                    "plural": ["look for trouble", "clench their fists"]
-                }
-            }
-
-    def process_npc_behaviors(self, game, npcs):
-        """
-        Process NPC behaviors for the current turn, enforcing limits.
-
-        Args:
-            game: The main game instance.
-            npcs: List of NPCs in the current area.
-
-        Returns:
-            A list of messages generated by NPC actions.
-        """
-        self.action_messages = []
-        actions_taken = 0
-
-        # Reset actions for all NPCs at the start of the turn
-        for npc in npcs:
-            if hasattr(npc, 'reset_actions'):
-                npc.reset_actions()
-
-        # Shuffle NPCs to randomize action order
-        random_npcs = npcs.copy()
-        random.shuffle(random_npcs)
-
-        for npc in random_npcs:
-            if actions_taken >= self.max_npc_actions_per_turn:
-                break  # Stop if we've reached the max actions for this turn
-
-            # Skip NPCs that are on cooldown or have already acted
-            if self._is_on_cooldown(npc) or npc.actions_this_turn >= self.max_actions_per_npc:
-                continue
-
-            # Let the NPC take an action
-            result = self._process_npc_action(npc, game)
-            if result:
-                self.action_messages.append(result)
-                actions_taken += 1
-                npc.actions_this_turn += 1
-
-                # Apply cooldown to the NPC
-                self._apply_cooldown(npc)
-
-        # Increment turn counter
-        self.current_turn += 1
-        
-        # Decrement cooldowns at the end of the turn
-        self.decrement_cooldowns()
-
-        return self.action_messages
-
-    def _process_npc_action(self, npc, game):
-        """Process a single NPC action based on their type and state."""
-        # Skip dead NPCs
-        if not npc.is_alive:
-            return None
-            
-        # Process GangMember specific behaviors
-        if isinstance(npc, GangMember):
-            # Update effects
-            if hasattr(npc, 'update_effects'):
-                npc.update_effects()
-                
-            # Check for effects that affect behavior
-            is_affected = False
-            if hasattr(npc, 'active_effects'):
-                for effect in npc.active_effects:
-                    # Check for hallucination effect
-                    if isinstance(effect, HallucinationEffect) or (hasattr(effect, 'get_hallucination_message') and hasattr(effect, 'affects_combat') and effect.affects_combat()):
-                        is_affected = True
-                        return f"{npc.name} {effect.get_hallucination_message()}."
-                    
-                    # Check for confusion effect
-                    elif isinstance(effect, ConfusionEffect) or (hasattr(effect, 'get_confusion_message') and hasattr(effect, 'affects_combat')):
-                        # Confusion may or may not prevent combat
-                        if effect.affects_combat():
-                            is_affected = True
-                            return f"{npc.name} {effect.get_confusion_message()}."
-            
-            # If affected by an effect that prevents combat, skip combat behaviors
-            if is_affected:
-                return None
-                
-            # Check for player detection
-            if hasattr(npc, 'detect_player') and game.player.current_area == npc.location:
-                detection_result = npc.detect_player(game.player, game)
-                if detection_result:
-                    return detection_result
-                    
-            # If player is detected, chance to attack
-            if hasattr(game.player, 'detected_by') and npc.gang in game.player.detected_by:
-                if random.random() < 0.9:  # 90% chance to attack if detected
-                    return npc.attack_player(game.player)
-                    
-            # Chance to attack other gang members
-            if random.random() < 0.4:  # 40% chance to check for enemies
-                # Find other gang members in the same area
-                other_gang_members = [other for other in npc.location.npcs 
-                                     if isinstance(other, GangMember) 
-                                     and other.gang != npc.gang
-                                     and other.is_alive]
-                                     
-                if other_gang_members:
-                    target = random.choice(other_gang_members)
-                    return npc.attack_npc(target)
-        
-        # General NPC behaviors
-        
-        # Chance to pick up items from the environment (30% chance)
-        if hasattr(npc.location, 'items') and npc.location.items and random.random() < 0.3:
-            item = random.choice(npc.location.items)
-            # Remove the item from the location and add it to NPC's inventory
-            npc.location.items.remove(item)
-            npc.add_item(item)
-            return f"{npc.name} picks up {item.name}."
-        
-        # Chance to use an item from inventory (60% chance)
-        if hasattr(npc, 'items') and npc.items and random.random() < 0.6:
-            item = random.choice(npc.items)
-            
-            # If it's a seed, try to plant it
-            if hasattr(item, 'crop_type') and hasattr(npc.location, 'objects'):
-                soil_plots = [obj for obj in npc.location.objects if hasattr(obj, 'add_plant')]
-                if soil_plots:
-                    soil = random.choice(soil_plots)
-                    from gardening import Plant
-                    plant = Plant(
-                        f"{item.crop_type} plant", 
-                        f"A young {item.crop_type} plant.", 
-                        item.crop_type, 
-                        item.value * 2
-                    )
-                    result = soil.add_plant(plant)
-                    if result[0]:  # Successfully planted
-                        npc.items.remove(item)
-                        return f"{npc.name} plants {item.name} in the {soil.name}."
-            
-            # If it's a weapon, use it against another NPC
-            if hasattr(item, 'damage'):
-                # Find a target NPC in the same area
-                potential_targets = [other for other in npc.location.npcs 
-                                    if other != npc and other.is_alive]
-                                    
-                if potential_targets and random.random() < 0.6:  # 60% chance to use weapon if targets exist
-                    target = random.choice(potential_targets)
-                    
-                    # Check if they're from different gangs (if they're gang members)
-                    if (isinstance(npc, GangMember) and isinstance(target, GangMember) and 
-                        npc.gang.name != target.gang.name):
-                        # Apply damage to target
-                        if hasattr(target, 'health'):
-                            damage = random.randint(item.damage // 2, item.damage)
-                            target.health -= damage
-                            
-                            # Check if target died
-                            if target.health <= 0:
-                                target.is_alive = False
-                                if hasattr(target, 'gang'):
-                                    target.gang.remove_member(target)
-                                return f"{npc.name} uses {item.name} to attack {target.name} for {damage} damage, defeating them!"
-                            
-                            return f"{npc.name} uses {item.name} to attack {target.name} for {damage} damage!"
-                    
-                    # If they're not gang members or from the same gang, just threaten
-                    elif random.random() < 0.3:  # 30% chance to threaten
-                        return f"{npc.name} threatens {target.name} with {item.name}!"
-            
-            # If it's an effect item, use it on other NPCs (high priority)
-            if hasattr(item, 'effect') and random.random() < 0.8:  # 80% chance to prioritize effect items
-                affected_npcs = []
-                
-                # Apply effect to other NPCs in the area
-                for other_npc in npc.location.npcs:
-                    # Skip dead NPCs and self
-                    if other_npc == npc or not other_npc.is_alive:
-                        continue
-                        
-                    # Apply the effect to the NPC
-                    if hasattr(other_npc, 'active_effects'):
-                        # Create a new instance of the effect for this NPC
-                        effect_copy = type(item.effect)()
-                        other_npc.active_effects.append(effect_copy)
-                        affected_npcs.append(other_npc)
-                
-                # If NPCs were affected, return a message
-                if affected_npcs:
-                    # Add the effect messages to the NPC coordinator
-                    if game and game.npc_coordinator:
-                        game.npc_coordinator.add_effect_messages(affected_npcs, item.effect)
-                    
-                    if len(affected_npcs) == 1:
-                        return f"{npc.name} uses {item.name} on {affected_npcs[0].name}!"
-                    else:
-                        return f"{npc.name} uses {item.name} on several NPCs!"
-            
-            # If it's a consumable, use it
-            if hasattr(item, 'health_restore'):
-                if hasattr(npc, 'health'):
-                    npc.health = min(100, npc.health + item.health_restore)
-                npc.items.remove(item)
-                return f"{npc.name} consumes {item.name}."
-                
-            # Generic item use
-            return f"{npc.name} uses {item.name}."
-            
-        # Gardening behaviors (40% chance if there are soil plots)
-        if hasattr(npc.location, 'objects') and random.random() < 0.4:
-            soil_plots = [obj for obj in npc.location.objects if hasattr(obj, 'plants')]
-            if soil_plots:
-                soil = random.choice(soil_plots)
-                
-                # Water plants (60% chance if there are plants)
-                if soil.plants and random.random() < 0.6:
-                    result = soil.water_plants()
-                    if result[0]:  # Successfully watered
-                        if "gardening" in self.actions_data and "singular" in self.actions_data["gardening"]:
-                            action = random.choice(self.actions_data["gardening"]["singular"])
-                            return f"{npc.name} {action}."
-                        return f"{npc.name} waters the plants in the {soil.name}."
-                
-                # Harvest plants (40% chance if there are harvestable plants)
-                harvestable_plants = [p for p in soil.plants if p.is_harvestable()]
-                if harvestable_plants and random.random() < 0.4:
-                    plant = random.choice(harvestable_plants)
-                    result = soil.harvest_plant(plant.name)
-                    if result[0]:  # Successfully harvested
-                        message, harvested_item = result[1]
-                        npc.add_item(harvested_item)
-                        return f"{npc.name} harvests {plant.name} and gets {harvested_item.name}."
-        
-        # Chance to talk to another NPC
-        if npc.location.npcs and len(npc.location.npcs) > 1 and random.random() < 0.4:
-            other_npcs = [other for other in npc.location.npcs if other != npc and other.is_alive]
-            if other_npcs:
-                other = random.choice(other_npcs)
-                # Use the npc_interactions from JSON if available
-                if "npc_interactions" in self.actions_data:
-                    interaction_types = list(self.actions_data["npc_interactions"].keys())
-                    interaction_type = random.choice(interaction_types)
-                    if self.actions_data["npc_interactions"][interaction_type]:
-                        interaction = random.choice(self.actions_data["npc_interactions"][interaction_type])
-                        return interaction.format(npc1_name=npc.name, npc2_name=other.name)
-                return f"{npc.name} talks with {other.name}."
-                
-        # Chance to interact with environment
-        if hasattr(npc.location, 'objects') and npc.location.objects and random.random() < 0.3:
-            obj = random.choice(npc.location.objects)
-            
-            # Handle breakable objects
-            if hasattr(obj, 'break_glass') and not obj.is_broken and random.random() < 0.2:
-                # NPC has a chance to break glass objects if they're aggressive
-                if isinstance(npc, GangMember) and random.random() < 0.4:
-                    # Check if NPC has a weapon
-                    weapon = next((item for item in npc.items if hasattr(item, 'damage')), None)
-                    
-                    if weapon:
-                        method = "shoot" if weapon.name.lower() == "gun" else "smash"
-                        
-                        # Break the object
-                        if isinstance(obj, VendingMachine):
-                            result = obj.break_glass(npc, method)
-                            if result[0]:
-                                # Add spilled items to the area
-                                for item in result[2]:
-                                    npc.location.add_item(item)
-                                # Clear the vending machine's items
-                                obj.items.clear()
-                                return result[1]
-                        else:
-                            result = obj.break_glass(npc, method)
-                            if result[0]:
-                                return result[1]
-            
-            # Handle other object types
-            if hasattr(obj, 'plants') and obj.plants:
-                return f"{npc.name} examines the plants in the {obj.name}."
-            elif hasattr(obj, 'is_hacked'):
-                return f"{npc.name} looks at the {obj.name}."
-                
-        # Idle behavior - use actions from JSON if available
-        if "idle" in self.actions_data and "singular" in self.actions_data["idle"]:
-            idle_actions = self.actions_data["idle"]["singular"]
-            if idle_actions:
-                action = random.choice(idle_actions)
-                return f"{npc.name} {action}."
-        
-        # Fallback idle actions if JSON data not available
-        idle_actions = [
-            f"{npc.name} stands around looking bored.",
-            f"{npc.name} checks their phone.",
-            f"{npc.name} looks around nervously.",
-            f"{npc.name} stretches and yawns.",
-            f"{npc.name} hums a tune to themselves."
-        ]
-        return random.choice(idle_actions)
-
-    def _is_on_cooldown(self, npc):
-        """Check if an NPC is on cooldown for their behavior."""
-        return self.npc_cooldowns.get(id(npc), 0) > 0
-
-    def _apply_cooldown(self, npc, cooldown=1):
-        """Apply a cooldown to an NPC."""
-        self.npc_cooldowns[id(npc)] = cooldown
-
-    def decrement_cooldowns(self):
-        """Decrement cooldowns for all NPCs."""
-        for npc_id in list(self.npc_cooldowns.keys()):
-            self.npc_cooldowns[npc_id] -= 1
-            if self.npc_cooldowns[npc_id] <= 0:
-                del self.npc_cooldowns[npc_id]
-                
-    def add_effect_messages(self, affected_npcs, effect):
-        """Add batch effect messages to be summarized."""
-        if not affected_npcs:
-            return
-            
-        # Group NPCs by effect message for better summarization
-        effect_messages = {}
-        
-        for npc in affected_npcs:
-            message = None
-            if isinstance(effect, HallucinationEffect):
-                message = effect.get_hallucination_message()
-            elif isinstance(effect, ConfusionEffect):
-                message = effect.get_confusion_message()
-                
-            if message:
-                if message not in effect_messages:
-                    effect_messages[message] = []
-                effect_messages[message].append(npc.name)
-        
-        # Create summarized messages
-        for message, npc_names in effect_messages.items():
-            if len(npc_names) > 2:
-                # Group message for 3 or more NPCs
-                self.action_messages.append(f"Several NPCs {message}")
-            elif len(npc_names) == 2:
-                # Pair message for 2 NPCs
-                self.action_messages.append(f"{npc_names[0]} and {npc_names[1]} {message}")
-            else:
-                # Individual message for 1 NPC
-                self.action_messages.append(f"{npc_names[0]} {message}")
+    """Coordinates the behavior of all NPCs in the game."""
     
-    def get_npc_summary(self):
-        """Get a summary of NPC actions for the current turn."""
-        if not self.action_messages:
-            return None
-            
-        # Group actions by type
-        effect_actions = []
-        combat_actions = []
-        other_actions = []
+    def __init__(self):
+        """Initialize an NPCBehaviorCoordinator object."""
+        pass
+    
+    def update_npcs(self, player):
+        """Update the behavior of all NPCs in the player's current area."""
+        if not player or not hasattr(player, 'current_area'):
+            return
         
-        for message in self.action_messages:
-            if "Several NPCs" in message or message.count(" and ") > 0:
-                effect_actions.append(message)
-            elif "attacks" in message.lower() or "damage" in message.lower():
-                combat_actions.append(message)
-            else:
-                other_actions.append(message)
+        area = player.current_area
         
-        # Combine each type of action with appropriate punctuation
-        summary_parts = []
-        if effect_actions:
-            summary_parts.extend(self._combine_messages_with_punctuation(effect_actions))
-        if combat_actions:
-            summary_parts.extend(self._combine_messages_with_punctuation(combat_actions))
-        if other_actions:
-            summary_parts.extend(self._combine_messages_with_punctuation(other_actions, max_count=3))
-            
-        # Join all summaries with appropriate punctuation
-        result = ""
-        for i, part in enumerate(summary_parts):
-            # If this is not the first part, add a space
-            if i > 0:
-                result += " "
+        # Update NPCs
+        if hasattr(area, 'npcs'):
+            for npc in area.npcs:
+                if hasattr(npc, 'update_behavior'):
+                    npc.update_behavior(player)
                 
-            # Add the part to the result
-            result += part
-            
-            # If this is not the last part, add appropriate separator
-            if i < len(summary_parts) - 1:
-                # If the part already ends with an exclamation mark, use that as the separator
-                if part.endswith("!"):
-                    result += ""
-                else:
-                    result += "."
+                if hasattr(npc, 'execute_behavior') and hasattr(area, 'grid'):
+                    npc.execute_behavior(area.grid)
+                
+                if hasattr(npc, 'update_effects'):
+                    npc.update_effects()
         
-        # Ensure the summary ends with punctuation
-        if not result.endswith(".") and not result.endswith("!"):
-            result += "."
-            
-        return result
+        # Update gang members
+        if hasattr(area, 'gang_members'):
+            for member in area.gang_members:
+                if hasattr(member, 'update_behavior'):
+                    member.update_behavior(player)
+                
+                if hasattr(member, 'execute_behavior') and hasattr(area, 'grid'):
+                    member.execute_behavior(area.grid)
+                
+                if hasattr(member, 'update_effects'):
+                    member.update_effects()
 
-    def _clean_message(self, message):
-        """Clean and normalize message punctuation."""
-        # Remove trailing periods and exclamation marks
-        # This allows us to add appropriate punctuation based on context
-        if message.endswith('.') or message.endswith('!'):
-            message = message[:-1]
-        return message
 
-    def _combine_messages_with_punctuation(self, messages, max_count=2):
-        """Combine messages with appropriate punctuation."""
-        if not messages:
-            return []
-            
-        # Clean messages first
-        cleaned_messages = [self._clean_message(msg) for msg in messages]
-        
-        combined = []
-        i = 0
-        while i < len(cleaned_messages) and len(combined) < max_count:
-            if i + 1 < len(cleaned_messages):
-                # Choose connector based on message content
-                if "attacks" in cleaned_messages[i].lower() and "attacks" in cleaned_messages[i+1].lower():
-                    # Use semicolons for related combat actions
-                    connector = "; "
-                elif any(word in cleaned_messages[i].lower() for word in ["picks up", "uses", "examines"]):
-                    # Use "while" for simultaneous non-combat actions
-                    connector = ", while "
-                else:
-                    # Randomly choose a connector with weights
-                    connector = random.choices([
-                        "; ",           # semicolon
-                        ", while ",     # while connector
-                        " as ",         # as connector
-                        ". Meanwhile, " # separate sentences
-                    ], weights=[40, 30, 20, 10])[0]
-                
-                # Check if the combined message should have an exclamation mark
-                first_msg = cleaned_messages[i]
-                second_msg = cleaned_messages[i + 1]
-                combined_msg = first_msg + connector + second_msg
-                
-                # Add exclamation mark if either message contains exciting content
-                exciting_words = ["attack", "defeat", "discover", "drag", "hostile", "damage", 
-                                 "fight", "break", "destroy", "crash", "explode", "yell", "scream"]
-                
-                if (any(word in first_msg.lower() for word in exciting_words) or 
-                    any(word in second_msg.lower() for word in exciting_words)):
-                    # Only add exclamation if the connector doesn't already end with punctuation
-                    if not connector.strip().endswith('.'):
-                        combined_msg += "!"
-                
-                combined.append(combined_msg)
-                i += 2
-            else:
-                # Add appropriate punctuation based on message content
-                message = cleaned_messages[i]
-                
-                # Check if the message should have an exclamation mark
-                if any(exciting_word in message.lower() for exciting_word in 
-                      ["attack", "defeat", "discover", "drag", "hostile", "damage", 
-                       "fight", "break", "destroy", "crash", "explode", "yell", "scream"]):
-                    # Add exclamation for exciting/dramatic actions
-                    combined.append(message + "!")
-                else:
-                    # Keep as is for normal actions (no exclamation)
-                    combined.append(message)
-                i += 1
-        return combined
+# Default behavior settings
+behavior_settings = {
+    "civilian": {
+        "idle_chance": 0.5,
+        "patrol_chance": 0.3,
+        "follow_chance": 0.1,
+        "flee_chance": 0.1,
+        "attack_chance": 0.0
+    },
+    "gang_member": {
+        "idle_chance": 0.3,
+        "patrol_chance": 0.4,
+        "follow_chance": 0.1,
+        "flee_chance": 0.0,
+        "attack_chance": 0.2
+    }
+}

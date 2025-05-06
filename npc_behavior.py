@@ -14,7 +14,8 @@ class NPC:
         self.description = description
         self.relationship = 0
         self.items = []
-        self.location = None
+        self.location = None  # Main area
+        self.sub_location = None  # Sub-area within the main area
         self.is_alive = True
         self.actions_this_turn = 0  # Tracks the number of actions this NPC has taken in the current turn
 
@@ -38,6 +39,43 @@ class NPC:
         item = next((i for i in self.items if i.name.lower() == item_name.lower()), None)
         if item:
             self.items.remove(item)
+
+    def enter_sub_area(self, sub_area_name):
+        """Enter a sub-area within the current area."""
+        if not self.location:
+            return False, f"{self.name} is not in any area."
+        
+        sub_area = self.location.get_sub_area(sub_area_name)
+        if not sub_area:
+            return False, f"There is no sub-area called '{sub_area_name}' here."
+        
+        # Remove from current location (main area or sub-area)
+        if self.sub_location:
+            # Currently in a sub-area, remove from there
+            self.sub_location.remove_npc(self)
+        else:
+            # Currently in main area, remove from there
+            self.location.remove_npc(self)
+        
+        # Add to new sub-area
+        sub_area.add_npc(self)
+        
+        return True, f"{self.name} enters the {sub_area.name}."
+    
+    def exit_sub_area(self):
+        """Exit the current sub-area and return to the main area."""
+        if not self.sub_location or not self.location:
+            return False, f"{self.name} is not in a sub-area."
+        
+        sub_area_name = self.sub_location.name
+        
+        # Remove from sub-area
+        self.sub_location.remove_npc(self)
+        
+        # Add to main area
+        self.location.add_npc(self)
+        
+        return True, f"{self.name} exits the {sub_area_name} and returns to the main area."
 
     def apply_hazard_effect(self, hazard):
         """Default hazard effect application for NPCs that do not have specific implementation."""
@@ -85,6 +123,10 @@ class GangMember(NPC):
         self.active_effects = []  # List of active effects
         self.hazard_resistance = 50  # Base 50% chance to resist hazard effects
         self.gang.add_member(self)
+        
+        # Initialize state manager with default 'silly' state
+        from npc_states import NPCStateManager
+        self.state_manager = NPCStateManager(default_state='silly')
 
     def update_effects(self):
         """Update active effects and remove expired ones."""
@@ -104,6 +146,31 @@ class GangMember(NPC):
             self.is_alive = False
             self.gang.remove_member(self)
             return f"{self.name} has been defeated!"
+        return None
+        
+    def set_state(self, state_name):
+        """
+        Manually set the NPC's behavior state.
+        
+        Args:
+            state_name: The name of the state to set ('silly', 'aggressive', 'tech', 'gardening')
+            
+        Returns:
+            True if successful, False if the state doesn't exist or NPC doesn't use state system
+        """
+        if hasattr(self, 'state_manager'):
+            return self.state_manager.force_state(state_name)
+        return False
+        
+    def get_state(self):
+        """
+        Get the NPC's current behavior state.
+        
+        Returns:
+            The name of the current state, or None if NPC doesn't use state system
+        """
+        if hasattr(self, 'state_manager'):
+            return self.state_manager.get_current_state_name()
         return None
 
     def attack_player(self, player):
@@ -248,6 +315,8 @@ class BehaviorType:
     GIFT = "gift"
     TECH = "tech"
     SUSPICIOUS = "suspicious"
+    ENTER_SUB_AREA = "enter_sub_area"
+    EXIT_SUB_AREA = "exit_sub_area"
 
 
 class BehaviorSettings:
@@ -261,6 +330,8 @@ class BehaviorSettings:
             BehaviorType.USE_ITEM: 0.3, # 30% chance for using items
             BehaviorType.GARDENING: 0.3,# 10% chance for gardening
             BehaviorType.GIFT: 0.0,     # 0% base chance for gifting (boosted by effects)
+            BehaviorType.ENTER_SUB_AREA: 0.2, # 20% chance for entering sub-areas
+            BehaviorType.EXIT_SUB_AREA: 0.1,  # 10% chance for exiting sub-areas
         }
         
         # Behavior frequency multipliers (1.0 = normal frequency, 0.5 = half frequency, 0.0 = disabled)
@@ -271,6 +342,8 @@ class BehaviorSettings:
             BehaviorType.USE_ITEM: 1.0,
             BehaviorType.GARDENING: 5.0,
             BehaviorType.GIFT: 1.0,
+            BehaviorType.ENTER_SUB_AREA: 2.0, # Higher frequency for entering sub-areas
+            BehaviorType.EXIT_SUB_AREA: 1.0,  # Normal frequency for exiting sub-areas
         }
         
         # Behavior cooldowns (in turns)
@@ -281,6 +354,8 @@ class BehaviorSettings:
             BehaviorType.USE_ITEM: 1,  # 1 turn between using items
             BehaviorType.GARDENING: 2, # 2 turns between gardening activities
             BehaviorType.GIFT: 5,      # 5 turns between gifting
+            BehaviorType.ENTER_SUB_AREA: 2, # 2 turns between entering sub-areas
+            BehaviorType.EXIT_SUB_AREA: 3,  # 3 turns between exiting sub-areas
         }
         
         # Last turn each behavior was performed (per NPC)
@@ -437,9 +512,18 @@ class NPCBehaviorCoordinator:
             # Update the behavior override timer
             if hasattr(npc, 'update_behavior_override'):
                 npc.update_behavior_override()
+        
+        # Process GangMember specific behaviors using the state pattern
+        if isinstance(npc, GangMember) and hasattr(npc, 'state_manager'):
+            # Update effects first
+            if hasattr(npc, 'update_effects'):
+                npc.update_effects()
             
-        # Process GangMember specific behaviors
-        if isinstance(npc, GangMember):
+            # Use the state manager to determine behavior
+            return npc.state_manager.update(npc, game)
+        
+        # Legacy behavior for NPCs without state manager
+        elif isinstance(npc, GangMember):
             # Update effects
             if hasattr(npc, 'update_effects'):
                 npc.update_effects()
@@ -489,15 +573,51 @@ class NPCBehaviorCoordinator:
         
         # General NPC behaviors - check for behavior_type to influence actions
         
+        # Check for sub-area behaviors first
+        if hasattr(npc, 'location') and npc.location:
+            # Chance to enter a sub-area if NPC is in the main area
+            if not npc.sub_location and npc.location.sub_areas:
+                if random.random() < 0.3:  # 30% chance to enter a sub-area
+                    # Choose a random sub-area
+                    sub_area_name = random.choice(list(npc.location.sub_areas.keys()))
+                    result = npc.enter_sub_area(sub_area_name)
+                    if result[0]:
+                        # If player is in the same main area, show the message
+                        if game.player.current_area == npc.location and not game.player.current_sub_area:
+                            return result[1]
+                        return None  # Don't show message if player is not in the same area
+            
+            # Chance to exit a sub-area if NPC is in a sub-area
+            elif npc.sub_location:
+                if random.random() < 0.2:  # 20% chance to exit a sub-area
+                    sub_area_name = npc.sub_location.name
+                    result = npc.exit_sub_area()
+                    if result[0]:
+                        # If player is in the same main area, show the message
+                        if game.player.current_area == npc.location and not game.player.current_sub_area:
+                            return result[1]
+                        # If player is in the same sub-area, show a different message
+                        elif game.player.current_area == npc.location and game.player.current_sub_area == sub_area_name.lower():
+                            return f"{npc.name} leaves the {sub_area_name}."
+                        return None  # Don't show message if player is not in the same area
+        
         # If NPC has a behavior_type, use it to influence their actions
         if hasattr(npc, 'behavior_type'):
             from npc_behavior import BehaviorType
             
             # Aggressive behavior - more likely to attack or threaten
             if npc.behavior_type == BehaviorType.FIGHT:
-                # Find a target NPC in the same area
-                potential_targets = [other for other in npc.location.npcs 
-                                    if other != npc and other.is_alive]
+                # Find a target NPC in the same area or sub-area
+                potential_targets = []
+                
+                if npc.sub_location:
+                    # NPC is in a sub-area, find targets in the same sub-area
+                    potential_targets = [other for other in npc.sub_location.npcs 
+                                        if other != npc and other.is_alive]
+                else:
+                    # NPC is in the main area, find targets in the main area
+                    potential_targets = [other for other in npc.location.npcs 
+                                        if other != npc and other.is_alive]
                                     
                 if potential_targets and random.random() < 0.7:  # 70% chance to be aggressive
                     target = random.choice(potential_targets)

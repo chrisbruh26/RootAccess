@@ -193,9 +193,21 @@
             {"type": "regular", "name": "Backpack", "description": "A sturdy backpack for carrying items.", "value": 20},
             {"type": "effect_item", "name": "Hacked Milk Blaster", "description": "A strange device that sprays hacked milk.", "value": 50, "effect_type": "hallucination"},
             {"type": "seed", "name": "Carrot Seed", "description": "A seed for growing carrot.", "value": 5, "plant_type": "carrot"},
-            {"type": "watering_can", "name": "Watering Can", "description": "Used for watering plants."}
+            {"type": "watering_can", "name": "Watering Can", "description": "Used for watering plants."},
+            {"type": "regular", "name": "Old Computer Part", "description": "A salvaged computer component.", "value": 15},
+            {"type": "regular", "name": "Empty Container", "description": "An empty container that could hold something.", "value": 5},
+            {"type": "regular", "name": "Chemical Compound", "description": "A mysterious chemical compound.", "value": 25}
         ],
 
+        "warehouse": [
+            {"type": "regular", "name": "Broken Drone", "description": "A damaged drone that might be repairable.", "value": 30},
+            {"type": "regular", "name": "Tech Component", "description": "A high-tech component with various uses.", "value": 40}
+        ],
+
+        "mall": [
+            {"type": "regular", "name": "Clothing", "description": "A set of ordinary clothes.", "value": 15},
+            {"type": "regular", "name": "Smartphone", "description": "A modern smartphone.", "value": 75}
+        ],
 
         "player": [
             {"template": "items:advanced_weapon", "name": "Machine Gun", "description": "A machine gun."},

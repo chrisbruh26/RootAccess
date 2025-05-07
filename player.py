@@ -100,8 +100,30 @@ class Player:
             if result[0]:
                 self.inventory.remove(item)
             return result
+        
+        # Handle hybrid items with multiple functionalities
+        if hasattr(item, 'health_restore') and hasattr(item, 'damage'):
+            # This is a weapon-consumable hybrid
+            # Set up hybrid choice mode in the game
+            game.hybrid_item = item
+            game.in_hybrid_choice_mode = True
+            return True, f"Do you want to attack with or consume {item.name}? (Type 'attack' or 'consume')", "hybrid_choice"
+        
+        elif hasattr(item, 'damage') and hasattr(item, 'effect'):
+            # This is a weapon-effect hybrid
+            # Set up hybrid choice mode in the game
+            game.hybrid_item = item
+            game.in_hybrid_choice_mode = True
+            return True, f"Do you want to attack with or apply the effect of {item.name}? (Type 'attack' or 'effect')", "hybrid_choice"
+        
+        elif hasattr(item, 'health_restore') and hasattr(item, 'effect'):
+            # This is a consumable-effect hybrid
+            # Set up hybrid choice mode in the game
+            game.hybrid_item = item
+            game.in_hybrid_choice_mode = True
+            return True, f"Do you want to consume or apply the effect of {item.name}? (Type 'consume' or 'effect')", "hybrid_choice"
             
-        # Handle weapons
+        # Handle weapons and other items with use method
         if hasattr(item, 'use'):
             return item.use(self, game)
         

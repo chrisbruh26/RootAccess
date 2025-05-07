@@ -26,18 +26,6 @@
                 "name": "Computer Terminal",
                 "description": "A computer terminal for various operations.",
                 "programs": ["data_miner", "security_override"]
-            },
-            "hacking_terminal": {
-                "type": "computer",
-                "name": "Hacking Terminal",
-                "description": "A specialized terminal for hacking operations.",
-                "programs": ["data_miner", "security_override", "plant_hacker", "firewall_breaker"]
-            },
-            "advanced_terminal": {
-                "type": "computer",
-                "name": "Advanced Terminal",
-                "description": "A cutting-edge terminal with advanced capabilities.",
-                "programs": ["neural_interface", "quantum_decoder", "ai_assistant", "virtual_reality"]
             }
         },
         "items": {
@@ -99,6 +87,10 @@
         "mall": {
             "name": "Mall",
             "description": "A large shopping mall with multiple stores and a food court."
+        },
+        "Testing Facility": {
+            "name": "Testing Facility",
+            "description": "A facility for running experiments on NPCs and other subjects."
         }
     },
     "connections": [
@@ -159,7 +151,7 @@
             }
         ],
         "Home": [
-            {"template": "hacking_terminal"},
+            {"template": "basic_computer"},
             {
                 "type": "hiding_spot",
                 "name": "Closet",
@@ -169,7 +161,6 @@
         ],
         
         "tech_store": [
-            {"template": "advanced_terminal"},
             {
                 "name": "Tech Store",
                 "description": "A store selling the latest technology.",

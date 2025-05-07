@@ -39,6 +39,61 @@ class NPC:
         item = next((i for i in self.items if i.name.lower() == item_name.lower()), None)
         if item:
             self.items.remove(item)
+            
+    def craft_item(self, crafting_system):
+        """
+        Attempt to craft an item using the crafting system.
+        
+        Args:
+            crafting_system: The game's crafting system
+            
+        Returns:
+            tuple: (bool, str, Item) - Success status, message, and the crafted item
+        """
+        # Check if NPC has enough items to craft anything
+        if len(self.items) < 2:
+            return False, f"{self.name} doesn't have enough items to craft anything.", None
+        
+        # First try to craft using recipes
+        available_recipes = crafting_system.get_available_recipes(self.items)
+        
+        if available_recipes:
+            # Choose a random recipe
+            recipe = random.choice(available_recipes)
+            
+            # Craft the item
+            can_craft, matching_items = recipe.can_craft(self.items)
+            if can_craft:
+                crafted_item = recipe.craft(matching_items)
+                
+                # Remove the ingredients from inventory
+                for item in matching_items:
+                    self.items.remove(item)
+                
+                # Add the crafted item to inventory
+                self.add_item(crafted_item)
+                
+                return True, f"{self.name} crafted a {crafted_item.name}!", crafted_item
+        
+        # If no recipes available, try random combination
+        if len(self.items) >= 2:
+            # Choose two random items
+            item1, item2 = random.sample(self.items, 2)
+            
+            # Combine the items
+            result = crafting_system.combine_items(item1, item2, self.items)
+            
+            if result[0]:  # Success
+                # Remove the original items from inventory
+                self.items.remove(item1)
+                self.items.remove(item2)
+                
+                # Add the new item to inventory
+                self.add_item(result[2])
+                
+                return True, f"{self.name} combined {item1.name} and {item2.name} to create {result[2].name}!", result[2]
+        
+        return False, f"{self.name} couldn't craft anything useful.", None
 
     def enter_sub_area(self, sub_area_name):
         """Enter a sub-area within the current area."""
@@ -317,6 +372,7 @@ class BehaviorType:
     SUSPICIOUS = "suspicious"
     ENTER_SUB_AREA = "enter_sub_area"
     EXIT_SUB_AREA = "exit_sub_area"
+    CRAFT = "craft"  # New behavior type for crafting
 
 
 class BehaviorSettings:
@@ -332,6 +388,7 @@ class BehaviorSettings:
             BehaviorType.GIFT: 0.0,     # 0% base chance for gifting (boosted by effects)
             BehaviorType.ENTER_SUB_AREA: 0.2, # 20% chance for entering sub-areas
             BehaviorType.EXIT_SUB_AREA: 0.1,  # 10% chance for exiting sub-areas
+            BehaviorType.CRAFT: 0.2,    # 20% chance for crafting items
         }
         
         # Behavior frequency multipliers (1.0 = normal frequency, 0.5 = half frequency, 0.0 = disabled)
@@ -344,6 +401,7 @@ class BehaviorSettings:
             BehaviorType.GIFT: 1.0,
             BehaviorType.ENTER_SUB_AREA: 2.0, # Higher frequency for entering sub-areas
             BehaviorType.EXIT_SUB_AREA: 1.0,  # Normal frequency for exiting sub-areas
+            BehaviorType.CRAFT: 1.5,          # Higher frequency for crafting
         }
         
         # Behavior cooldowns (in turns)
@@ -351,6 +409,7 @@ class BehaviorSettings:
             BehaviorType.IDLE: 1,      # 1 turn between idle behaviors
             BehaviorType.TALK: 2,      # 2 turns between talking
             BehaviorType.FIGHT: 3,     # 3 turns between fighting
+            BehaviorType.CRAFT: 4,     # 4 turns between crafting attempts
             BehaviorType.USE_ITEM: 1,  # 1 turn between using items
             BehaviorType.GARDENING: 2, # 2 turns between gardening activities
             BehaviorType.GIFT: 5,      # 5 turns between gifting
@@ -638,6 +697,17 @@ class NPCBehaviorCoordinator:
                     return f"{npc.name} fiddles with their {item.name}."
                 else:
                     return f"{npc.name} scans the area with a small device."
+                    
+            # Crafting behavior - attempt to craft items
+            elif npc.behavior_type == BehaviorType.CRAFT:
+                if hasattr(npc, 'craft_item') and len(npc.items) >= 2:
+                    # Attempt to craft an item
+                    result = npc.craft_item(game.crafting_system)
+                    if result[0]:  # Success
+                        return result[1]
+                    else:
+                        # If crafting failed, show a message about the attempt
+                        return f"{npc.name} tries to combine some items but fails."
             
             # Suspicious behavior - more likely to watch others or hide
             elif npc.behavior_type == BehaviorType.SUSPICIOUS:

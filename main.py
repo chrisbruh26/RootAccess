@@ -13,6 +13,7 @@ from player import Player
 from area import Area
 from random_events import RandomEventManager
 from world_builder import WorldBuilder
+from crafting import CraftingSystem, initialize_crafting_system
 
 # ----------------------------- #
 # GAME MANAGEMENT               #
@@ -28,10 +29,22 @@ class Game:
         self.running = True
         self.event_manager = None  # Will be initialized after game is fully set up
         
+        # Initialize crafting system
+        self.crafting_system = initialize_crafting_system()
+        
         # Weapon targeting system
         self.targeting_weapon = None
         self.targeting_npcs = None
         self.in_targeting_mode = False
+        
+        # Crafting system variables
+        self.crafting_item1 = None
+        self.crafting_item2 = None
+        self.in_crafting_mode = False
+        
+        # Hybrid item choice system
+        self.hybrid_item = None
+        self.in_hybrid_choice_mode = False
         
         # Store command arguments for use by other methods
         self.process_command_args = []
@@ -93,6 +106,11 @@ class Game:
             # NPC state commands
             'npc_states': {'handler': self.cmd_npc_states, 'category': 'interaction'},
             
+            # Crafting commands
+            'craft': {'handler': self.cmd_craft, 'category': 'crafting'},
+            'recipes': {'handler': self.cmd_recipes, 'category': 'crafting'},
+            'combine': {'handler': self.cmd_combine, 'category': 'crafting'},
+            
             # System commands
             'help': {'handler': self.cmd_help, 'category': 'system'},
             'quit': {'handler': self.cmd_quit, 'category': 'system'},
@@ -153,6 +171,107 @@ class Game:
                 npc_names = [npc.name for npc in self.targeting_npcs]
                 npc_list = ", ".join(npc_names)
                 return f"Target not found. You can target: {npc_list}\nType the name of the NPC you want to attack, or 'cancel' to stop."
+        
+        # Check if we're in crafting mode (selecting second item)
+        if self.in_crafting_mode and self.crafting_item1:
+            # If user types 'cancel', exit crafting mode
+            if command.lower() == 'cancel':
+                self.crafting_item1 = None
+                self.in_crafting_mode = False
+                return "Crafting canceled."
+                
+            # Try to find the second item in inventory
+            item_name = command
+            item2 = next((item for item in self.player.inventory if item.name.lower() == item_name.lower()), None)
+            
+            if item2:
+                # Combine the items
+                result = self.crafting_system.combine_items(self.crafting_item1, item2, self.player.inventory)
+                
+                if result[0]:  # Success
+                    # Remove the original items from inventory
+                    self.player.inventory.remove(self.crafting_item1)
+                    self.player.inventory.remove(item2)
+                    
+                    # Add the new item to inventory
+                    self.player.add_item(result[2])
+                    
+                    # Reset crafting mode
+                    self.crafting_item1 = None
+                    self.in_crafting_mode = False
+                    
+                    # Update turn after crafting
+                    self.update_turn()
+                    
+                    return result[1]
+                else:
+                    # Reset crafting mode
+                    self.crafting_item1 = None
+                    self.in_crafting_mode = False
+                    
+                    return result[1]
+            else:
+                return f"You don't have a {item_name} in your inventory.\nType the name of another item to combine with {self.crafting_item1.name}, or 'cancel' to stop."
+        
+        # Check if we're in hybrid item choice mode
+        if self.in_hybrid_choice_mode and self.hybrid_item:
+            # If user types 'cancel', exit hybrid choice mode
+            if command.lower() == 'cancel':
+                self.hybrid_item = None
+                self.in_hybrid_choice_mode = False
+                return "Action canceled."
+                
+            # Process the choice
+            if hasattr(self.hybrid_item, 'health_restore') and command.lower() == 'consume':
+                # Use as consumable
+                result = self.hybrid_item.consume(self.player, self)
+                
+                # Reset hybrid choice mode
+                self.hybrid_item = None
+                self.in_hybrid_choice_mode = False
+                
+                # Update turn after using
+                self.update_turn()
+                
+                return result[1]
+            elif hasattr(self.hybrid_item, 'effect') and command.lower() == 'effect':
+                # Use for effect
+                result = self.hybrid_item.apply_effect(self.player, self)
+                
+                # Reset hybrid choice mode
+                self.hybrid_item = None
+                self.in_hybrid_choice_mode = False
+                
+                # Update turn after using
+                self.update_turn()
+                
+                return result[1]
+            elif command.lower() == 'attack':
+                # Use as weapon
+                # Get a list of alive NPCs
+                alive_npcs = [npc for npc in self.player.current_area.npcs if hasattr(npc, 'is_alive') and npc.is_alive]
+                
+                if alive_npcs:
+                    # Set up targeting mode
+                    self.targeting_weapon = self.hybrid_item
+                    self.targeting_npcs = alive_npcs
+                    
+                    # Reset hybrid choice mode
+                    self.hybrid_item = None
+                    self.in_hybrid_choice_mode = False
+                    
+                    # Show available targets
+                    npc_names = [npc.name for npc in alive_npcs]
+                    npc_list = ", ".join(npc_names)
+                    return f"You can target: {npc_list}\nType the name of the NPC you want to attack, or 'cancel' to stop."
+                else:
+                    # Reset hybrid choice mode
+                    self.hybrid_item = None
+                    self.in_hybrid_choice_mode = False
+                    
+                    return "There are no NPCs to attack here."
+            else:
+                return f"Invalid choice. Type 'attack', 'consume', 'effect', or 'cancel'."
         
         # Normal command processing
         action = parts[0]
@@ -659,9 +778,18 @@ class Game:
         help_text.append("\nNPC State System:")
         help_text.append("  Use 'npc_states' to view the current behavior states of NPCs in the area.")
         help_text.append("  Use 'hack [target number] behavior [state]' to hack an NPC's neural interface.")
-        help_text.append("  Available states: silly, aggressive, tech, gardening")
+        
+        # Add information about crafting
+        help_text.append("\nCrafting System:")
+        help_text.append("  Use 'recipes' to view available crafting recipes.")
+        help_text.append("  Use 'craft [recipe name]' to craft an item using a recipe.")
+        help_text.append("  Use 'combine [item name]' to combine two items into a hybrid item.")
+        
+        help_text.append("\nNPC States:")
+        help_text.append("  Available states: silly, aggressive, tech, gardening, craft")
         help_text.append("  Note: You need a deployed hacking drone to modify NPC behavior states.")
-        help_text.append("  Type 'help [command]' for more information about a specific command.")
+        
+        help_text.append("\nType 'help [command]' for more information about a specific command.")
         
         return "\n".join(help_text)
 
@@ -1153,6 +1281,69 @@ class Game:
     
 
 
+
+# ----------------------------- #
+# CRAFTING COMMANDS             #
+# ----------------------------- #
+
+    def cmd_craft(self, args):
+        """Craft an item using a recipe."""
+        if not args:
+            return "Craft what? Specify a recipe name or use 'recipes' to see available recipes."
+        
+        recipe_name = " ".join(args)
+        result = self.crafting_system.craft_item(recipe_name, self.player.inventory)
+        
+        if result[0]:  # Success
+            # Remove the ingredients from inventory
+            for recipe in self.crafting_system.recipes:
+                if recipe.name.lower() == recipe_name.lower():
+                    can_craft, matching_items = recipe.can_craft(self.player.inventory)
+                    if can_craft:
+                        for item in matching_items:
+                            self.player.inventory.remove(item)
+                        break
+            
+            # Add the crafted item to inventory
+            self.player.add_item(result[2])
+            
+            # Update turn after crafting
+            self.update_turn()
+            
+            return result[1]
+        else:
+            return result[1]
+    
+    def cmd_recipes(self, args):
+        """Show available recipes that can be crafted with current inventory."""
+        available_recipes = self.crafting_system.get_available_recipes(self.player.inventory)
+        
+        if not available_recipes:
+            return "You don't have the ingredients for any recipes. Try finding more items!"
+        
+        messages = ["Available recipes:"]
+        for recipe in available_recipes:
+            ingredients = ", ".join(recipe.ingredients)
+            messages.append(f"- {recipe.name}: {recipe.description} (Requires: {ingredients})")
+        
+        return "\n".join(messages)
+    
+    def cmd_combine(self, args):
+        """Combine two items to create a hybrid item."""
+        if not args:
+            return "Combine what? Specify the first item to combine."
+        
+        item_name = " ".join(args)
+        item = next((i for i in self.player.inventory if i.name.lower() == item_name.lower()), None)
+        
+        if not item:
+            return f"You don't have a {item_name} in your inventory."
+        
+        # Set up crafting mode for the second item
+        self.crafting_item1 = item
+        self.in_crafting_mode = True
+        
+        return f"You selected {item.name} as the first item. What would you like to combine it with? (Type the name of another item in your inventory, or 'cancel' to stop)"
 
 # ----------------------------- #
 # MAIN ENTRY POINT              #

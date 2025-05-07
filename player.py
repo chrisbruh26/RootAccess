@@ -70,18 +70,32 @@ class Player:
             return self.current_area.npcs if self.current_area else []
     
     def use_item(self, item_name, game):
+        # First check for exact item name match
         item = next((i for i in self.inventory if i.name.lower() == item_name.lower()), None)
+        
+        # If not found, check if it's a hybrid item by looking for partial matches
+        if not item:
+            # Check if any hybrid items contain this name as part of their name
+            item = next((i for i in self.inventory if hasattr(i, 'is_hybrid') and 
+                        (item_name.lower() in i.name.lower() or 
+                         (hasattr(i, 'parent1') and hasattr(i.parent1, 'name') and item_name.lower() == i.parent1.name.lower()) or
+                         (hasattr(i, 'parent2') and hasattr(i.parent2, 'name') and item_name.lower() == i.parent2.name.lower()))), None)
+        
+        # If still not found, try a more flexible search for hybrid items
+        if not item:
+            # Check if any hybrid items contain this name as part of their parent names
+            item = next((i for i in self.inventory if hasattr(i, 'is_hybrid') and 
+                        ((hasattr(i, 'parent1') and hasattr(i.parent1, 'name') and item_name.lower() in i.parent1.name.lower()) or
+                         (hasattr(i, 'parent2') and hasattr(i.parent2, 'name') and item_name.lower() in i.parent2.name.lower()))), None)
+        
         if not item:
             return False, f"You don't have a {item_name}."
         
-        # Handle consumables
-        if isinstance(item, Consumable):
-            self.health = min(self.max_health, self.health + item.health_restore)
-            self.inventory.remove(item)
-            return True, f"You use the {item.name} and restore {item.health_restore} health."
+        # Check if this is a hybrid item
+        is_hybrid = hasattr(item, 'is_hybrid') and item.is_hybrid
         
-        # Handle seeds (planting)
-        if isinstance(item, Seed):
+        # Handle seeds (planting) - special case for both regular and hybrid seeds
+        if isinstance(item, Seed) or (is_hybrid and hasattr(item, 'crop_type') and hasattr(item, 'growth_time')):
             # Check if there's soil in the current location (area or sub-area)
             objects = self.get_current_location_objects()
             soil = next((obj for obj in objects if hasattr(obj, 'add_plant')), None)
@@ -97,32 +111,69 @@ class Player:
             )
             
             result = soil.add_plant(plant)
-            if result[0]:
+            if result[0] and not is_hybrid:
+                # Only remove the item if it's not a hybrid
                 self.inventory.remove(item)
             return result
         
+        # Handle consumables
+        if isinstance(item, Consumable) and not is_hybrid:
+            self.health = min(self.max_health, self.health + item.health_restore)
+            self.inventory.remove(item)
+            return True, f"You use the {item.name} and restore {item.health_restore} health."
+        
         # Handle hybrid items with multiple functionalities
-        if hasattr(item, 'health_restore') and hasattr(item, 'damage'):
-            # This is a weapon-consumable hybrid
-            # Set up hybrid choice mode in the game
-            game.hybrid_item = item
-            game.in_hybrid_choice_mode = True
-            return True, f"Do you want to attack with or consume {item.name}? (Type 'attack' or 'consume')", "hybrid_choice"
-        
-        elif hasattr(item, 'damage') and hasattr(item, 'effect'):
-            # This is a weapon-effect hybrid
-            # Set up hybrid choice mode in the game
-            game.hybrid_item = item
-            game.in_hybrid_choice_mode = True
-            return True, f"Do you want to attack with or apply the effect of {item.name}? (Type 'attack' or 'effect')", "hybrid_choice"
-        
-        elif hasattr(item, 'health_restore') and hasattr(item, 'effect'):
-            # This is a consumable-effect hybrid
-            # Set up hybrid choice mode in the game
-            game.hybrid_item = item
-            game.in_hybrid_choice_mode = True
-            return True, f"Do you want to consume or apply the effect of {item.name}? (Type 'consume' or 'effect')", "hybrid_choice"
+        if is_hybrid:
+            # Determine what functionalities this hybrid has
+            has_weapon = hasattr(item, 'damage')
+            has_consumable = hasattr(item, 'health_restore')
+            has_effect = hasattr(item, 'effect')
             
+            # If it has multiple functionalities, ask the player what to do
+            if (has_weapon and has_consumable) or (has_weapon and has_effect) or (has_consumable and has_effect):
+                # Set up hybrid choice mode in the game
+                game.hybrid_item = item
+                game.in_hybrid_choice_mode = True
+                
+                # Create appropriate prompt based on functionalities
+                if has_weapon and has_consumable:
+                    return True, f"Do you want to attack with or consume {item.name}? (Type 'attack' or 'consume')", "hybrid_choice"
+                elif has_weapon and has_effect:
+                    return True, f"Do you want to attack with or apply the effect of {item.name}? (Type 'attack' or 'effect')", "hybrid_choice"
+                elif has_consumable and has_effect:
+                    return True, f"Do you want to consume or apply the effect of {item.name}? (Type 'consume' or 'effect')", "hybrid_choice"
+            else:
+                # If it only has one functionality, use that directly
+                if has_weapon:
+                    # Get a list of alive NPCs
+                    alive_npcs = [npc for npc in self.current_area.npcs if hasattr(npc, 'is_alive') and npc.is_alive]
+                    
+                    if alive_npcs:
+                        # Set up targeting mode
+                        game.targeting_weapon = item
+                        game.targeting_npcs = alive_npcs
+                        
+                        # Show available targets
+                        npc_names = [npc.name for npc in alive_npcs]
+                        npc_list = ", ".join(npc_names)
+                        return True, f"You can target: {npc_list}\nType the name of the NPC you want to attack, or 'cancel' to stop.", "target_selection", alive_npcs
+                    else:
+                        return False, "There are no NPCs to attack here."
+                elif has_consumable:
+                    # Use as consumable
+                    if hasattr(item, 'consume'):
+                        return item.consume(self, game)
+                    else:
+                        self.health = min(self.max_health, self.health + item.health_restore)
+                        return True, f"You consume the {item.name} and restore {item.health_restore} health."
+                elif has_effect:
+                    # Use for effect
+                    if hasattr(item, 'apply_effect'):
+                        return item.apply_effect(self, game)
+                    else:
+                        effect_name = item.effect.name if hasattr(item.effect, 'name') else "unknown"
+                        return True, f"You use the {item.name} and apply the {effect_name} effect."
+        
         # Handle weapons and other items with use method
         if hasattr(item, 'use'):
             return item.use(self, game)

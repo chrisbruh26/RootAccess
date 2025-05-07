@@ -224,7 +224,13 @@ class Game:
             # Process the choice
             if hasattr(self.hybrid_item, 'health_restore') and command.lower() == 'consume':
                 # Use as consumable
-                result = self.hybrid_item.consume(self.player, self)
+                if hasattr(self.hybrid_item, 'consume'):
+                    result = self.hybrid_item.consume(self.player, self)
+                else:
+                    # For hybrid items that don't have a specific consume method
+                    self.player.health = min(self.player.max_health, 
+                                           self.player.health + self.hybrid_item.health_restore)
+                    result = (True, f"You consume the {self.hybrid_item.name} and restore {self.hybrid_item.health_restore} health.")
                 
                 # Reset hybrid choice mode
                 self.hybrid_item = None
@@ -233,10 +239,55 @@ class Game:
                 # Update turn after using
                 self.update_turn()
                 
-                return result[1]
+                # Handle different result formats
+                if isinstance(result, tuple) and len(result) >= 2:
+                    return result[1]
+                else:
+                    return str(result)
+                    
             elif hasattr(self.hybrid_item, 'effect') and command.lower() == 'effect':
                 # Use for effect
-                result = self.hybrid_item.apply_effect(self.player, self)
+                if hasattr(self.hybrid_item, 'apply_effect'):
+                    result = self.hybrid_item.apply_effect(self.player, self)
+                else:
+                    # For hybrid items that don't have a specific apply_effect method
+                    # Try to use the effect directly
+                    effect_name = self.hybrid_item.effect.name if hasattr(self.hybrid_item.effect, 'name') else "unknown"
+                    
+                    # Apply effect to NPCs in the current area
+                    messages = []
+                    affected_npcs = []
+                    
+                    messages.append(f"You use the {self.hybrid_item.name} to apply its effect!")
+                    
+                    if self.player.current_area and self.player.current_area.npcs:
+                        for npc in self.player.current_area.npcs:
+                            # Skip dead NPCs
+                            if hasattr(npc, 'is_alive') and not npc.is_alive:
+                                continue
+                                
+                            # Apply the effect to the NPC
+                            if hasattr(npc, 'active_effects'):
+                                # Create a new instance of the effect for this NPC
+                                effect_copy = type(self.hybrid_item.effect)()
+                                npc.active_effects.append(effect_copy)
+                                affected_npcs.append(npc)
+                    
+                        # Add the effect messages to the NPC coordinator
+                        if self.npc_coordinator:
+                            self.npc_coordinator.add_effect_messages(affected_npcs, self.hybrid_item.effect)
+                        
+                        # Add more detailed message about affected NPCs
+                        if affected_npcs:
+                            if len(affected_npcs) == 1:
+                                messages.append(f"{affected_npcs[0].name} is affected by the {effect_name} effect!")
+                            elif len(affected_npcs) <= 3:
+                                npc_names = ", ".join(npc.name for npc in affected_npcs)
+                                messages.append(f"{npc_names} are affected by the {effect_name} effect!")
+                            else:
+                                messages.append(f"Several NPCs are affected by the {effect_name} effect!")
+                    
+                    result = (True, "\n".join(messages))
                 
                 # Reset hybrid choice mode
                 self.hybrid_item = None
@@ -245,7 +296,11 @@ class Game:
                 # Update turn after using
                 self.update_turn()
                 
-                return result[1]
+                # Handle different result formats
+                if isinstance(result, tuple) and len(result) >= 2:
+                    return result[1]
+                else:
+                    return str(result)
             elif command.lower() == 'attack':
                 # Use as weapon
                 # Get a list of alive NPCs
@@ -516,9 +571,35 @@ class Game:
         if not args:
             return "Plant what? Specify a seed."
         seed_name = " ".join(args)
+        
+        # First try to find a regular seed
         seed = next((i for i in self.player.inventory if i.name.lower() == seed_name.lower() and isinstance(i, Seed)), None)
+        
+        # If not found, check for hybrid items with seed functionality
+        if not seed:
+            # Look for hybrid items with crop_type and growth_time attributes (seed properties)
+            seed = next((i for i in self.player.inventory 
+                        if hasattr(i, 'is_hybrid') and i.is_hybrid and 
+                        hasattr(i, 'crop_type') and hasattr(i, 'growth_time') and
+                        (seed_name.lower() in i.name.lower() or
+                         (hasattr(i, 'parent1') and hasattr(i.parent1, 'name') and seed_name.lower() in i.parent1.name.lower()) or
+                         (hasattr(i, 'parent2') and hasattr(i.parent2, 'name') and seed_name.lower() in i.parent2.name.lower()))), None)
+        
+        # If still not found, try a more flexible search for hybrid items
+        if not seed:
+            seed = next((i for i in self.player.inventory 
+                        if hasattr(i, 'is_hybrid') and i.is_hybrid and 
+                        (seed_name.lower() in i.name.lower())), None)
+        
         if not seed:
             return f"You don't have a {seed_name}."
+        
+        # Check if it's a hybrid item
+        is_hybrid = hasattr(seed, 'is_hybrid') and seed.is_hybrid
+        
+        # If it's a hybrid but doesn't have crop_type, it can't be planted
+        if is_hybrid and not hasattr(seed, 'crop_type'):
+            return f"The {seed.name} cannot be planted."
         
         soil = next((obj for obj in self.player.current_area.objects if isinstance(obj, SoilPlot)), None)
         if not soil:
@@ -533,7 +614,9 @@ class Game:
         
         result = soil.add_plant(plant)
         if result[0]:
-            self.player.inventory.remove(seed)
+            # Only remove the item if it's not a hybrid
+            if not is_hybrid:
+                self.player.inventory.remove(seed)
             self.update_turn()
         return result[1]
 

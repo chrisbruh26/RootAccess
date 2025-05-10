@@ -107,6 +107,11 @@ class Game:
             'merge': {'handler': self.cmd_combine, 'category': 'crafting'},
             'examine': {'handler': self.cmd_examine, 'category': 'interaction'},
             
+            # Storage commands
+            'store': {'handler': self.cmd_store, 'category': 'storage'},
+            'retrieve': {'handler': self.cmd_retrieve, 'category': 'storage'},
+            'containers': {'handler': self.cmd_containers, 'category': 'storage'},
+            
             # System commands
             'help': {'handler': self.cmd_help, 'category': 'system'},
             'quit': {'handler': self.cmd_quit, 'category': 'system'},
@@ -175,11 +180,30 @@ class Game:
         self.areas["warehouse"].add_object(container3)
         
         # Add items to areas
-        backpack = Entity("Backpack", "A sturdy backpack for carrying items.")
-        backpack.add_tag("item")
-        backpack.add_component("inventory", InventoryComponent(capacity=10))
-        backpack.value = 20
+        from components import create_backpack, create_safe, create_refrigerator, create_storage_container
+        
+        # Replace the old backpack with our new storage backpack
+        backpack = create_backpack("Backpack", "A sturdy backpack for carrying items.", capacity=10, value=20)
         self.areas["Home"].add_item(backpack)
+        
+        # Add a safe to the home area
+        safe = create_safe("Safe", "A secure safe for storing valuable items.", capacity=5, value=100)
+        self.areas["Home"].add_object(safe)
+        
+        # Add a refrigerator to the home area
+        fridge = create_refrigerator("Refrigerator", "A refrigerator for storing food items.", capacity=15, value=75)
+        self.areas["Home"].add_object(fridge)
+        
+        # Add a toolbox to the warehouse
+        toolbox = create_storage_container(
+            "Toolbox", 
+            "A metal toolbox for storing tools.", 
+            capacity=8, 
+            storage_name="Toolbox", 
+            value=30
+        )
+        toolbox.add_tag("toolbox")
+        self.areas["warehouse"].add_item(toolbox)
         
         tomato_seed = create_seed("Tomato Seed", "A seed for growing tomatoes.", "tomato", 5)
         self.areas["garden"].add_item(tomato_seed)
@@ -1229,6 +1253,12 @@ class Game:
                 examination.append(f"- Can be planted in (capacity: {component.capacity})")
             elif component_type == "watering_can":
                 examination.append(f"- Can water plants (water: {component.current_water}/{component.water_capacity})")
+            elif component_type == "storage":
+                examination.append(f"- Can store items (capacity: {component.capacity}, items: {len(component.items)})")
+                if component.locked:
+                    examination.append(f"  - Currently locked")
+                if component.restricted_tags:
+                    examination.append(f"  - Restricted to: {', '.join(component.restricted_tags)}")
             elif hasattr(component, "component_type"):
                 if component.component_type == "weapon":
                     examination.append(f"- Can be used as a weapon (damage: {component.damage})")
@@ -1238,8 +1268,139 @@ class Game:
                     examination.append(f"- Can be planted to grow a plant")
                 elif component.component_type == "watering_can":
                     examination.append(f"- Can water plants")
+                elif component.component_type == "storage":
+                    examination.append(f"- Can store items (capacity: {component.capacity}, items: {len(component.items)})")
         
         return "\n".join(examination)
+    
+    
+    def cmd_store(self, args):
+        """Store an item in a container."""
+        if not args or len(args) < 3 or args[-2].lower() != "in":
+            return "Usage: store [item] in [container]"
+        
+        # Parse the command
+        container_name = args[-1].lower()
+        item_name = " ".join(args[:-2]).lower()
+        
+        # Get the player's inventory
+        inventory = self.player.get_component("inventory")
+        if not inventory:
+            return "You don't have an inventory."
+        
+        # Find the item in the player's inventory
+        item = inventory.get_item_by_name(item_name)
+        if not item:
+            return f"You don't have a {item_name}."
+        
+        # Find the container in the player's inventory or in the current area
+        container = inventory.get_item_by_name(container_name)
+        if not container:
+            # Check if the container is in the current area
+            container = next((obj for obj in self.player.current_area.objects if obj.name.lower() == container_name), None)
+            if not container:
+                container = next((i for i in self.player.current_area.items if i.name.lower() == container_name), None)
+                if not container:
+                    return f"You don't see a {container_name} here."
+        
+        # Check if the container has a storage component
+        storage_component = container.get_component("storage")
+        if not storage_component:
+            return f"The {container.name} is not a container."
+        
+        # Store the item
+        result = storage_component.add_item(item)
+        if result[0]:
+            # Remove the item from the player's inventory
+            inventory.remove_item(item)
+            return result[1]
+        else:
+            return result[1]
+    
+    
+    def cmd_retrieve(self, args):
+        """Retrieve an item from a container."""
+        if not args or len(args) < 3 or args[-2].lower() != "from":
+            return "Usage: retrieve [item] from [container]"
+        
+        # Parse the command
+        container_name = args[-1].lower()
+        item_name = " ".join(args[:-2]).lower()
+        
+        # Get the player's inventory
+        inventory = self.player.get_component("inventory")
+        if not inventory:
+            return "You don't have an inventory."
+        
+        # Find the container in the player's inventory or in the current area
+        container = inventory.get_item_by_name(container_name)
+        if not container:
+            # Check if the container is in the current area
+            container = next((obj for obj in self.player.current_area.objects if obj.name.lower() == container_name), None)
+            if not container:
+                container = next((i for i in self.player.current_area.items if i.name.lower() == container_name), None)
+                if not container:
+                    return f"You don't see a {container_name} here."
+        
+        # Check if the container has a storage component
+        storage_component = container.get_component("storage")
+        if not storage_component:
+            return f"The {container.name} is not a container."
+        
+        # Find the item in the container
+        item = storage_component.get_item_by_name(item_name)
+        if not item:
+            return f"There is no {item_name} in the {container.name}."
+        
+        # Check if the player's inventory has space
+        if len(inventory.items) >= inventory.capacity:
+            return "Your inventory is full."
+        
+        # Remove the item from the container
+        result = storage_component.remove_item(item)
+        if result[0]:
+            # Add the item to the player's inventory
+            inventory.add_item(item)
+            return result[1]
+        else:
+            return result[1]
+    
+    
+    def cmd_containers(self, args):
+        """List all containers in the current area and in the player's inventory."""
+        # Get the player's inventory
+        inventory = self.player.get_component("inventory")
+        if not inventory:
+            return "You don't have an inventory."
+        
+        # Find containers in the player's inventory
+        inventory_containers = [item for item in inventory.items if item.has_component("storage")]
+        
+        # Find containers in the current area
+        area_containers = [obj for obj in self.player.current_area.objects if hasattr(obj, 'has_component') and obj.has_component("storage")]
+        area_containers += [item for item in self.player.current_area.items if hasattr(item, 'has_component') and item.has_component("storage")]
+        
+        # Build the result message
+        result = []
+        
+        if inventory_containers:
+            result.append("Containers in your inventory:")
+            for container in inventory_containers:
+                storage = container.get_component("storage")
+                result.append(f"- {container.name} ({len(storage.items)}/{storage.capacity} items)")
+        
+        if area_containers:
+            if result:
+                result.append("")
+            result.append("Containers in the area:")
+            for container in area_containers:
+                storage = container.get_component("storage")
+                result.append(f"- {container.name} ({len(storage.items)}/{storage.capacity} items)")
+        
+        if not result:
+            return "You don't see any containers."
+        
+        return "\n".join(result)
     
     def cmd_help(self, args):
         """Show help information."""

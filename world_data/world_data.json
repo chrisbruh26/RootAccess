@@ -1,0 +1,249 @@
+{
+    "templates": {
+        "objects": {
+            "standard_vending_machine": {
+                "type": "vending_machine",
+                "name": "Vending Machine",
+                "description": "A vending machine filled with snacks and drinks.",
+                "items": [
+                    {"type": "consumable", "name": "Soda", "description": "A refreshing soda.", "price": 5, "health_restore": 10},
+                    {"type": "consumable", "name": "Chips", "description": "A bag of chips.", "price": 5, "health_restore": 5},
+                    {"type": "consumable", "name": "Candy Bar", "description": "A chocolate candy bar.", "price": 5, "health_restore": 15},
+                    {"type": "consumable", "name": "Energy Drink", "description": "A caffeinated beverage that restores health.", "price": 10, "health_restore": 20}
+                ]
+            },
+            "basic_computer": {
+                "type": "computer",
+                "name": "Computer Terminal",
+                "description": "A computer terminal for various operations.",
+                "programs": ["data_miner", "security_override", "plant_hacker"]
+            },
+            "hiding_spot": {
+                "type": "hiding_spot",
+                "name": "Hiding Spot",
+                "description": "A place to hide from NPCs.",
+                "effectiveness": 0.7
+            },
+            "soil_plot": {
+                "type": "soil_plot",
+                "name": "Soil Plot",
+                "description": "A plot of soil for planting seeds."
+            }
+        },
+        "items": {
+            "basic_weapon": {
+                "type": "weapon",
+                "name": "Basic Weapon",
+                "description": "A standard weapon.",
+                "value": 50,
+                "damage": 20
+            },
+            "advanced_weapon": {
+                "type": "weapon",
+                "name": "Advanced Weapon",
+                "description": "A powerful weapon with advanced capabilities.",
+                "value": 200,
+                "damage": 40
+            },
+            "smoke_bomb": {
+                "type": "smoke_bomb",
+                "name": "Smoke Bomb",
+                "description": "A device that creates a thick cloud of smoke, allowing for escape.",
+                "value": 30
+            },
+            "tech_decoy": {
+                "type": "decoy",
+                "name": "Tech Decoy",
+                "description": "A small device that creates noise and light to distract NPCs.",
+                "value": 25
+            },
+            "watering_can": {
+                "type": "watering_can",
+                "name": "Watering Can",
+                "description": "Used for watering plants."
+            },
+            "hacked_milk_blaster": {
+                "type": "effect_item",
+                "name": "Hacked Milk Blaster",
+                "description": "A strange device that sprays hacked milk.",
+                "value": 50,
+                "effect_type": "hallucination"
+            },
+            "confusion_ray": {
+                "type": "effect_item",
+                "name": "Confusion Ray",
+                "description": "A device that emits waves that confuse the target.",
+                "value": 60,
+                "effect_type": "confusion"
+            },
+            "carrot_seed": {
+                "type": "seed",
+                "name": "Carrot Seed",
+                "description": "A seed for growing carrot.",
+                "value": 5,
+                "plant_type": "carrot"
+            },
+            "tomato_seed": {
+                "type": "seed",
+                "name": "Tomato Seed",
+                "description": "A seed for growing tomatoes.",
+                "value": 5,
+                "plant_type": "tomato"
+            },
+            "potato_seed": {
+                "type": "seed",
+                "name": "Potato Seed",
+                "description": "A seed for growing potatoes.",
+                "value": 5,
+                "plant_type": "potato"
+            }
+        },
+        "npcs": {
+            "gang_member": {
+                "type": "gang_member",
+                "name": "Gang Member",
+                "description": "A member of a gang.",
+                "items": [
+                    {"template": "items:basic_weapon", "name": "Gun", "description": "A standard firearm."}
+                ]
+            },
+            "civilian": {
+                "type": "civilian",
+                "name": "Civilian",
+                "description": "A regular civilian."
+            }
+        }
+    },
+    "areas": {
+        "Home": {
+            "name": "Home",
+            "description": "Your secret base of operations. It's small but functional."
+        },
+        "garden": {
+            "name": "Garden",
+            "description": "A small garden area with fertile soil."
+        },
+        "street": {
+            "name": "Street",
+            "description": "A busy street with various shops and people."
+        },
+        "alley": {
+            "name": "Alley",
+            "description": "A dark alley between buildings."
+        },
+        "plaza": {
+            "name": "Plaza",
+            "description": "A large open plaza with a fountain in the center."
+        },
+        "warehouse": {
+            "name": "Warehouse",
+            "description": "An abandoned warehouse, taken over by the Bloodhounds."
+        },
+        "construction": {
+            "name": "Construction Site",
+            "description": "A construction site with various equipment and materials."
+        }
+    },
+    "connections": [
+        {"source": "Home", "direction": "north", "destination": "garden"},
+        {"source": "garden", "direction": "south", "destination": "Home"},
+        {"source": "garden", "direction": "east", "destination": "street"},
+        {"source": "street", "direction": "west", "destination": "garden"},
+        {"source": "street", "direction": "north", "destination": "plaza"},
+        {"source": "plaza", "direction": "south", "destination": "street"},
+        {"source": "street", "direction": "east", "destination": "alley"},
+        {"source": "alley", "direction": "west", "destination": "street"},
+        {"source": "street", "direction": "south", "destination": "warehouse"},
+        {"source": "warehouse", "direction": "north", "destination": "street"},
+        {"source": "plaza", "direction": "east", "destination": "construction"},
+        {"source": "construction", "direction": "west", "destination": "plaza"}
+    ],
+    "gangs": {
+        "Crimson Vipers": {
+            "names": ["Vipoop", "Snakle", "Rattlesnop", "Pythirt", "Anaceaky", 
+                      "Cobrus-brus", "Lizuddles", "Viperino", "Slitherpuff", 
+                      "Hissypants", "Slinker", "Snakester"]
+        },
+        "Bloodhounds": {
+            "names": ["Buck", "Bubbles", "Boop", "Noodle", "Flop", "Squirt", 
+                      "Squeaky", "Gus-Gus", "Puddles", "Muffin", "Binky", "Beep-Beep"]
+        }
+    },
+    "objects": {
+        "garden": [
+            {"template": "objects:soil_plot"},
+            {"template": "objects:hiding_spot", "name": "Bushes", "description": "Dense bushes that provide good cover.", "effectiveness": 0.7}
+        ],
+        "warehouse": [
+            {"template": "objects:soil_plot"},
+            {"template": "objects:standard_vending_machine"},
+            {"template": "objects:hiding_spot", "name": "Crates", "description": "Stacked crates that provide decent cover.", "effectiveness": 0.6},
+            {"template": "objects:hiding_spot", "name": "Construction Container", "description": "A large metal container used for storing construction materials.", "effectiveness": 0.9},
+            {"template": "objects:hiding_spot", "name": "Equipment Shed", "description": "A small shed for storing construction equipment.", "effectiveness": 0.8},
+            {"template": "objects:hiding_spot", "name": "Cement Mixer", "description": "A large cement mixer you can hide behind.", "effectiveness": 0.7}
+        ],
+        "Home": [
+            {"template": "objects:basic_computer"},
+            {"template": "objects:hiding_spot", "name": "Closet", "description": "A small closet that you can hide in.", "effectiveness": 0.8}
+        ],
+        "alley": [
+            {"template": "objects:hiding_spot", "name": "Dumpster", "description": "A large dumpster you can hide behind.", "effectiveness": 0.6}
+        ],
+        "plaza": [
+            {"template": "objects:hiding_spot", "name": "Fountain", "description": "A large fountain with decorative elements to hide behind.", "effectiveness": 0.5}
+        ]
+    },
+    "items": {
+        "Home": [
+            {"type": "regular", "name": "Backpack", "description": "A sturdy backpack for carrying items.", "value": 20},
+            {"template": "items:hacked_milk_blaster"},
+            {"template": "items:carrot_seed"},
+            {"template": "items:watering_can"},
+            {"type": "drone", "name": "Drone", "description": "A small drone that can be controlled remotely."}
+        ],
+        "garden": [
+            {"template": "items:tomato_seed"},
+            {"template": "items:potato_seed"},
+            {"template": "items:tech_decoy"}
+        ],
+        "street": [
+            {"type": "consumable", "name": "Energy Drink", "description": "A caffeinated beverage that restores health.", "value": 10, "health_restore": 20},
+            {"template": "items:smoke_bomb"}
+        ],
+        "alley": [
+            {"type": "weapon", "name": "Pipe", "description": "A metal pipe that can be used as a weapon.", "value": 15, "damage": 10},
+            {"template": "items:confusion_ray"},
+            {"template": "items:smoke_bomb"}
+        ],
+        "warehouse": [
+            {"template": "items:hacked_milk_blaster"},
+            {"template": "items:tech_decoy"},
+            {"template": "items:carrot_seed"}
+        ],
+        "player": [
+            {"type": "weapon", "name": "Machine Gun", "description": "A machine gun.", "value": 100, "damage": 50},
+            {"template": "items:watering_can"},
+            {"template": "items:smoke_bomb"},
+            {"template": "items:tech_decoy"}
+        ]
+    },
+    "npcs": {
+        "garden": [
+            {"template": "npcs:civilian", "name": "Gardener", "description": "A friendly gardener tending to the plants."},
+            {"type": "civilian", "name": "Ben", "description": "A random civilian named Ben."},
+            {"type": "civilian", "name": "Bobetti", "description": "A random civilian named Bobetti."},
+            {"type": "civilian", "name": "Charloodle", "description": "A random civilian named Charloodle."},
+            {"type": "civilian", "name": "Mucklebuck", "description": "A random civilian named Mucklebuck."},
+            {"type": "civilian", "name": "Beevoboop", "description": "A random civilian named Beevoboop."}
+        ],
+        "warehouse": [
+            {"template": "npcs:gang_member", "name": "Vipoop", "description": "A member of the Crimson Vipers named Vipoop.", "gang": "Crimson Vipers"},
+            {"template": "npcs:gang_member", "name": "Buck", "description": "A member of the Bloodhounds named Buck.", "gang": "Bloodhounds"},
+            {"template": "npcs:gang_member", "name": "Bubbles", "description": "A member of the Bloodhounds named Bubbles.", "gang": "Bloodhounds"},
+            {"template": "npcs:gang_member", "name": "Boop", "description": "A member of the Bloodhounds named Boop.", "gang": "Bloodhounds"},
+            {"template": "npcs:gang_member", "name": "Noodle", "description": "A member of the Bloodhounds named Noodle.", "gang": "Bloodhounds"},
+            {"template": "npcs:gang_member", "name": "Flop", "description": "A member of the Bloodhounds named Flop.", "gang": "Bloodhounds"},
+            {"type": "civilian", "name": "John", "description": "A random guy."}
+        ]
+    }
+}

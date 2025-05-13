@@ -66,31 +66,57 @@ class Player:
         
         # Display objects at the current position
         objects_here = self.current_area.get_objects_at(grid_x, grid_y, grid_z)
+        # Keep track of items and objects we've already shown to the player
+        shown_items = []
+        shown_objects = []
+        
         if objects_here:
             items_here = [obj for obj in objects_here if hasattr(obj, 'pickupable') and obj.pickupable]
             other_objects = [obj for obj in objects_here if not hasattr(obj, 'pickupable') or not obj.pickupable]
             
             if items_here:
-                print("Items at your position (can be picked up):")
+                print("Items within arm's reach (can be picked up):") # shows the player which items are immediately available 
                 for obj in items_here:
-                    print(f"- {obj.name} ") # REMOVE ALL DESCRIPTIONS FROM LISTS, ONLY SHOW IF PLAYER EXAMINES (items, objects, etc.) - need examine method
+                    print(f"- {obj.name}") # REMOVE ALL DESCRIPTIONS FROM LISTS, ONLY SHOW IF PLAYER EXAMINES (items, objects, etc.) - need examine method
+                    # Add to shown items list so we don't show them again
+                    shown_items.append(obj)
                     
             if other_objects:
                 print("Objects at your position:")
                 for obj in other_objects:
                     print(f"- {obj.name}")
+                    # Add to shown objects list so we don't show them again
+                    shown_objects.append(obj)
         
         # Display items in the area
         if self.current_area.items:
-            print("Items in this area:")
-            for item in self.current_area.items:
+            # Filter out items that have already been shown
+            area_items = [item for item in self.current_area.items if item not in shown_items]
+            
+            # Create a list of visible items with their positions
+            visible_items = []
+            for item in area_items:
                 # Get the relative position of the item
                 item_rel_x = item.coordinates.x - self.current_area.coordinates.x
                 item_rel_y = item.coordinates.y - self.current_area.coordinates.y
-                # Only show items that are visible (in the same area)
+                # Only include items that are visible (in the same area)
                 if 0 <= item_rel_x < self.current_area.grid_width and 0 <= item_rel_y < self.current_area.grid_length:
                     direction = self.get_relative_direction(grid_x, grid_y, item_rel_x, item_rel_y)
-                    print(f"- {item.name}: ({direction})") # remove description for items 
+                    visible_items.append((item, direction))
+            
+            if visible_items:  # Only print the header if there are items to show
+                print("Items in this area:")
+                
+                # Check if there are fewer than 3 items in the area
+                if len(visible_items) <= 3:
+                    for item, direction in visible_items:
+                        print(f"- {item.name} ({direction})") # remove description for items
+                # Else, show the first 3 and add "and more" to the end
+                else:
+                    for item, direction in visible_items[:3]:
+                        print(f"- {item.name} ({direction})")
+                    print(f"- and more...")
+
         
         # Display NPCs in the area
         if self.current_area.npcs:
@@ -106,17 +132,29 @@ class Player:
         
         # Display objects in the area
         if self.current_area.objects:
-            print("Objects in this area:")
+            # Create a list of visible objects that haven't been shown yet
+            visible_objects = []
             for obj in self.current_area.objects:
+                # Skip objects that have already been shown
+                if obj in shown_objects:
+                    continue
+                    
                 # Get the relative position of the object
                 obj_rel_x = obj.coordinates.x - self.current_area.coordinates.x
                 obj_rel_y = obj.coordinates.y - self.current_area.coordinates.y
+                
                 # Only show objects that are visible (in the same area)
                 if 0 <= obj_rel_x < self.current_area.grid_width and 0 <= obj_rel_y < self.current_area.grid_length:
                     # Skip objects at the current position (already displayed above)
                     if obj_rel_x == grid_x and obj_rel_y == grid_y:
                         continue
                     direction = self.get_relative_direction(grid_x, grid_y, obj_rel_x, obj_rel_y)
+                    visible_objects.append((obj, direction))
+            
+            # Only print the header if there are objects to show
+            if visible_objects:
+                print("Objects in this area:")
+                for obj, direction in visible_objects:
                     print(f"- {obj.name}: ({direction})") # remove description for objects
     
     def get_relative_direction(self, from_x, from_y, to_x, to_y):

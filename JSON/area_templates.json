@@ -23,6 +23,14 @@
         "grid_length": 5,
         "weather": "clear"
     },
+    "shop": {
+        "type": "Area",
+        "name": "Shop",
+        "description": "A small shop selling various items.",
+        "grid_width": 6,
+        "grid_length": 6,
+        "weather": "controlled"
+    },
     "alley": {
         "type": "Area",
         "name": "Alley",

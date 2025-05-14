@@ -10,9 +10,7 @@
         "name": "Energy Drink",
         "description": "A caffeinated beverage that restores health.",
         "nutrition": 10,
-        "effects": {
-            "energy": 20
-        },
+        "effects": {"energy": 20},
         "value": 10
     },
     "pipe": {

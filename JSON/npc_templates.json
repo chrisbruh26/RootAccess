@@ -1,6 +1,8 @@
 {
     "civilian": {
-        "name": "Civilian",
+        "type": "Civilian",
+        "name_prefix": "Civilian",
+        "generate_name": true,
         "description": "An ordinary citizen going about their day.",
         "dialogue": {
             "default": "Hello there!",
@@ -12,26 +14,28 @@
         },
         "money": 50,
         "schedule": {
-            "8:00": [
-                "walking",
-                "plaza"
-            ],
-            "12:00": [
-                "eating",
-                "street"
-            ],
-            "18:00": [
-                "shopping",
-                "plaza"
-            ],
-            "22:00": [
-                "sleeping",
-                "home"
-            ]
-        }
+            "8:00": ["walking", "plaza"],
+            "12:00": ["eating", "street"],
+            "18:00": ["shopping", "plaza"],
+            "22:00": ["sleeping", "home"]
+        },
+        "behaviors": [
+            "walk_around",
+            "interact_with_objects",
+            "chat_with_others",
+            "use_items",
+            "react_to_player"
+        ],
+        "possible_items": [
+            "energy_drink",
+            "watering_can",
+            "carrot_seed"
+        ]
     },
     "gang_member_bloodhound": {
-        "name": "Bloodhound Gang Member",
+        "type": "GangMember",
+        "name_prefix": "Bloodhound",
+        "generate_name": true,
         "description": "A member of the Bloodhounds gang.",
         "dialogue": {
             "default": "What do you want? This is Bloodhound territory.",
@@ -44,26 +48,27 @@
         "money": 100,
         "gang": "Bloodhounds",
         "schedule": {
-            "10:00": [
-                "patrolling",
-                "warehouse"
-            ],
-            "14:00": [
-                "guarding",
-                "alley"
-            ],
-            "20:00": [
-                "meeting",
-                "warehouse"
-            ],
-            "2:00": [
-                "sleeping",
-                "warehouse"
-            ]
-        }
+            "10:00": ["patrolling", "warehouse"],
+            "14:00": ["guarding", "alley"],
+            "20:00": ["meeting", "warehouse"],
+            "2:00": ["sleeping", "warehouse"]
+        },
+        "behaviors": [
+            "patrol_territory",
+            "intimidate_civilians",
+            "guard_area",
+            "attack_enemies"
+        ],
+        "possible_items": [
+            "gun",
+            "pipe",
+            "energy_drink"
+        ]
     },
     "gang_member_viper": {
-        "name": "Crimson Viper Gang Member",
+        "type": "GangMember",
+        "name_prefix": "Viper",
+        "generate_name": true,
         "description": "A member of the Crimson Vipers gang.",
         "dialogue": {
             "default": "Keep moving. Vipers don't like strangers.",
@@ -76,25 +81,25 @@
         "money": 100,
         "gang": "Crimson Vipers",
         "schedule": {
-            "9:00": [
-                "patrolling",
-                "plaza"
-            ],
-            "15:00": [
-                "dealing",
-                "alley"
-            ],
-            "21:00": [
-                "meeting",
-                "construction_site"
-            ],
-            "3:00": [
-                "sleeping",
-                "construction_site"
-            ]
-        }
+            "9:00": ["patrolling", "plaza"],
+            "15:00": ["dealing", "alley"],
+            "21:00": ["meeting", "construction_site"],
+            "3:00": ["sleeping", "construction_site"]
+        },
+        "behaviors": [
+            "patrol_territory",
+            "deal_contraband",
+            "guard_area",
+            "attack_enemies"
+        ],
+        "possible_items": [
+            "pipe",
+            "smoke_bomb",
+            "energy_drink"
+        ]
     },
     "shopkeeper": {
+        "type": "Civilian",
         "name": "Shopkeeper",
         "description": "A friendly shopkeeper selling various goods.",
         "dialogue": {
@@ -107,22 +112,24 @@
         },
         "money": 500,
         "schedule": {
-            "8:00": [
-                "opening_shop",
-                "street"
-            ],
-            "12:00": [
-                "selling",
-                "street"
-            ],
-            "20:00": [
-                "closing_shop",
-                "street"
-            ],
-            "22:00": [
-                "sleeping",
-                "home"
-            ]
-        }
+            "8:00": ["opening_shop", "shop"],
+            "12:00": ["selling", "shop"],
+            "20:00": ["closing_shop", "shop"],
+            "22:00": ["sleeping", "home"]
+        },
+        "behaviors": [
+            "manage_shop",
+            "restock_inventory",
+            "greet_customers",
+            "count_money"
+        ],
+        "possible_items": [
+            "backpack",
+            "watering_can",
+            "tomato_seed",
+            "potato_seed",
+            "carrot_seed",
+            "energy_drink"
+        ]
     }
 }

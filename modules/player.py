@@ -503,7 +503,7 @@ class Player:
             
             print(f"You don't see a {target_name} nearby that you can hack.")
     
-    def attack(self, target_name):
+    def attack(self, target_name, game_manager=None):
         """Attack a target NPC or object."""
         # Get current grid position
         grid_x, grid_y, grid_z = self.get_grid_position()
@@ -529,6 +529,15 @@ class Player:
                     print(f"You attack {npc.name} with your fists for {int(damage)} damage!")
                     # In a full implementation, this would affect NPC health and relationships
                     self.adjust_relationship(npc, -10)  # Attacking makes NPCs dislike you
+                
+                # Set the target NPC to react to being attacked
+                if hasattr(npc, 'interrupt_action'):
+                    npc.interrupt_action()
+                    npc.set_action("defending", self, 5)
+                
+                # Trigger NPC reactions to the attack
+                if game_manager:
+                    self._trigger_npc_reactions(game_manager, "attack", npc)
             else:
                 print(f"{npc.name} is too far away. Move closer to attack.")
         else:
@@ -549,6 +558,10 @@ class Player:
                     else:
                         print(f"You attack the {obj.name} with your fists!")
                         obj.break_object(self)
+                    
+                    # Trigger NPC reactions to the attack on an object
+                    if game_manager:
+                        self._trigger_npc_reactions(game_manager, "attack", obj)
                 else:
                     print(f"The {obj.name} is too far away. Move closer to attack.")
             else:
@@ -690,6 +703,43 @@ class Player:
     def get_relationship(self, entity):
         """Get relationship value with another entity."""
         return self.relationships.get(entity.name, 0)
+        
+    def _trigger_npc_reactions(self, game_manager, action_type, target=None):
+        """Trigger reactions from NPCs in the current area to a player action."""
+        if not self.current_area or not hasattr(self.current_area, 'npcs'):
+            return
+            
+        # Get all NPCs in the current area
+        npcs_in_area = self.current_area.npcs
+        
+        # Collect reactions
+        reactions = []
+        
+        # Have each NPC react to the player's action
+        for npc in npcs_in_area:
+            if npc == target:  # Skip the target of the action
+                continue
+                
+            # Get the NPC's reaction
+            reaction = npc.react_to_player_action(self, action_type, target)
+            if reaction:
+                reactions.append(reaction)
+        
+        # Display reactions (limit to 3 most interesting ones)
+        if reactions:
+            # Prioritize reactions: combat > social > other
+            combat_reactions = [r for r in reactions if any(word in r.lower() for word in ["defend", "attack", "fight", "help"])]
+            social_reactions = [r for r in reactions if any(word in r.lower() for word in ["cheer", "watch", "notice", "approach"])]
+            other_reactions = [r for r in reactions if r not in combat_reactions and r not in social_reactions]
+            
+            # Combine reactions with priority
+            prioritized_reactions = combat_reactions + social_reactions + other_reactions
+            
+            # Display up to 3 reactions
+            if prioritized_reactions:
+                print("\nNPC Reactions:")
+                for reaction in prioritized_reactions[:3]:
+                    print(reaction)
     
     def to_dict(self):
         """Convert player to dictionary for serialization."""

@@ -754,8 +754,13 @@ class GameManager:
         """Update the game time and related systems."""
         self.time_system.advance_time(minutes)
         
-        # Update NPCs based on time
-        self.npc_manager.update_all_npcs(self.time_system.get_time_key())
+        # Update NPCs based on time and get behavior messages
+        npc_behavior_messages = self.npc_manager.update_all_npcs(self.time_system.get_time_key(), self)
+        
+        # Display NPC behavior messages if any
+        if npc_behavior_messages:
+            print("\nNPC Activities:")
+            print(npc_behavior_messages)
         
         # Update player hunger
         self.player.hunger = min(self.player.max_hunger, self.player.hunger + minutes * 0.1)
@@ -826,7 +831,13 @@ class GameManager:
         elif action == "talk":
             if len(parts) > 1:
                 npc_name = " ".join(parts[1:])
+                # Find the NPC
+                npc = next((n for n in self.player.current_area.npcs if n.name.lower() == npc_name.lower()), None)
                 self.player.talk_to(npc_name)
+                
+                # Trigger NPC reactions to the conversation
+                if npc:
+                    self.player._trigger_npc_reactions(self, "talk", npc)
             else:
                 print("Who do you want to talk to?")
         
@@ -862,7 +873,7 @@ class GameManager:
         elif action == "attack":
             if len(parts) > 1:
                 target = " ".join(parts[1:])
-                self.player.attack(target)
+                self.player.attack(target, self)  # Pass the game_manager instance
             else:
                 print("What do you want to attack?")
         

@@ -754,13 +754,25 @@ class GameManager:
         """Update the game time and related systems."""
         self.time_system.advance_time(minutes)
         
-        # Update NPCs based on time and get behavior messages
-        npc_behavior_messages = self.npc_manager.update_all_npcs(self.time_system.get_time_key(), self)
+        # Update all NPCs based on time
+        self.npc_manager.update_all_npcs(self.time_system.get_time_key(), self)
         
-        # Display NPC behavior messages if any
-        if npc_behavior_messages:
-            print("\nNPC Activities:")
-            print(npc_behavior_messages)
+        # Get behavior messages only for NPCs in the player's current area
+        if self.player and self.player.current_area:
+            current_area_npcs = [npc for npc in self.player.current_area.npcs]
+            
+            if current_area_npcs:
+                # Get behavior messages for NPCs in the player's area
+                area_behavior_message = self.npc_manager.get_area_npc_behaviors(
+                    self.player.current_area, 
+                    current_area_npcs,
+                    self
+                )
+                
+                # Display NPC behavior messages if any
+                if area_behavior_message:
+                    print("\nAround you:")
+                    print(area_behavior_message)
         
         # Update player hunger
         self.player.hunger = min(self.player.max_hunger, self.player.hunger + minutes * 0.1)

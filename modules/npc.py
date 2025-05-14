@@ -1,6 +1,3 @@
-# changes: 
-# NPCs react to player action, so far just watch nervously when player attacks someone (hilarious) 
-
 """
 NPC module for Root Access v3.
 Handles all non-player characters in the game world.
@@ -938,6 +935,24 @@ class NPCBehaviorCoordinator:
         
         self.last_behavior_turn[npc_id][behavior_type] = self.current_turn
     
+    def update_npc_behavior(self, npc, game=None):
+        """Update an NPC's behavior state without generating messages."""
+        # Skip if NPC is not in a location
+        if not npc.location:
+            return
+            
+        # Check if the NPC is continuing an ongoing action
+        if npc.is_action_ongoing():
+            # NPC is already doing something, just let it continue
+            return
+            
+        # Initialize action count for this NPC
+        if npc.id not in self.npc_actions_this_turn:
+            self.npc_actions_this_turn[npc.id] = 0
+            
+        # Process the NPC's behavior to update its state
+        self.process_npc_behavior(npc, game)
+    
     def process_npc_behaviors(self, game, npcs):
         """
         Process NPC behaviors for the current turn, enforcing limits.
@@ -1655,7 +1670,6 @@ class NPCManager:
                     suitable_area = self.find_suitable_area_for_npc(npc, game.area_manager)
                     if suitable_area:
                         npc.set_location(suitable_area)
-                        print(f"DEBUG: Moved {npc.name} from restricted area {npc.location.id} to {suitable_area.name}")
             
             # Update the NPC's activity with environment awareness
             if game and hasattr(game, 'area_manager'):
@@ -1663,39 +1677,149 @@ class NPCManager:
             else:
                 npc.update_activity(current_time)
         
-        # Group NPCs by area for more efficient processing
-        npcs_by_area = {}
+        # Process behaviors for all NPCs (but don't generate messages yet)
         for npc in self.npcs.values():
-            if npc.location:
-                area_id = npc.location.id
-                # Skip NPCs in restricted areas
-                if area_id in self.restricted_areas:
-                    continue
-                    
-                if area_id not in npcs_by_area:
-                    npcs_by_area[area_id] = []
-                npcs_by_area[area_id].append(npc)
-        
-        # Process behaviors for NPCs in each area
-        npc_behavior_messages = []
-        for area_id, area_npcs in npcs_by_area.items():
-            # Process behaviors for this group of NPCs
-            behavior_message = self.behavior_coordinator.process_npc_behaviors(game, area_npcs)
-            if behavior_message:
-                # Add area name to the message for context
-                area_name = "Unknown Area"
-                if game and hasattr(game, 'area_manager'):
-                    area = game.area_manager.get_area(area_id)
-                    if area:
-                        area_name = area.name
+            if npc.location and npc.location.id not in self.restricted_areas:
+                # Just update the NPC's behavior state
+                self.behavior_coordinator.update_npc_behavior(npc)
                 
-                area_message = f"In {area_name}:\n{behavior_message}"
-                npc_behavior_messages.append(area_message)
-        
-        # Return the behavior messages
-        if npc_behavior_messages:
-            return "\n\n".join(npc_behavior_messages)
+        # No need to return messages here, as we'll get them on demand with get_area_npc_behaviors
         return None
+        
+    def get_area_npc_behaviors(self, area, npcs, game=None):
+        """Get behavior messages for NPCs in a specific area."""
+        if not npcs:
+            return None
+            
+        # Track which NPCs are continuing their previous actions
+        continuing_npcs = []
+        new_action_npcs = []
+        
+        # Group NPCs by their current action for better narrative
+        npcs_by_action = {}
+        
+        for npc in npcs:
+            # Skip NPCs in restricted areas
+            if npc.location and npc.location.id in self.restricted_areas:
+                continue
+                
+            # Check if the NPC is continuing the same action
+            if npc.action_memory and len(npc.action_memory) >= 2:
+                latest_action = npc.action_memory[0]["action"]  # Current action
+                previous_action = npc.action_memory[1]["action"]  # Previous action
+                
+                if latest_action == previous_action:
+                    continuing_npcs.append(npc)
+                else:
+                    new_action_npcs.append(npc)
+                    
+                    # Group by action for better narrative
+                    if latest_action not in npcs_by_action:
+                        npcs_by_action[latest_action] = []
+                    npcs_by_action[latest_action].append(npc)
+            else:
+                # If no previous action or not enough history, treat as new action
+                new_action_npcs.append(npc)
+                
+                # Get the current action
+                current_action = npc.current_action if hasattr(npc, 'current_action') else "idle"
+                
+                # Group by action
+                if current_action not in npcs_by_action:
+                    npcs_by_action[current_action] = []
+                npcs_by_action[current_action].append(npc)
+        
+        # Generate messages for NPCs with new actions
+        new_action_messages = []
+        
+        # Process each action group
+        for action, action_npcs in npcs_by_action.items():
+            if not action_npcs:
+                continue
+                
+            # If there are multiple NPCs doing the same action, group them
+            if len(action_npcs) > 1:
+                npc_names = [npc.name for npc in action_npcs]
+                
+                # Format the list of names properly
+                if len(npc_names) == 2:
+                    names_str = f"{npc_names[0]} and {npc_names[1]}"
+                else:
+                    names_str = ", ".join(npc_names[:-1]) + f", and {npc_names[-1]}"
+                
+                # Create a message for the group
+                action_verb = self._get_action_verb(action)
+                new_action_messages.append(f"{names_str} {action_verb} {action}.")
+            else:
+                # Individual NPC message
+                npc = action_npcs[0]
+                action_verb = self._get_action_verb(action)
+                new_action_messages.append(f"{npc.name} {action_verb} {action}.")
+        
+        # Generate a message for NPCs continuing their actions
+        continuation_message = None
+        if continuing_npcs:
+            if len(continuing_npcs) == len(npcs):
+                # All NPCs are continuing their previous actions
+                continuation_message = "Everyone carries on with their previous activities."
+            else:
+                # Some NPCs are continuing
+                npc_names = [npc.name for npc in continuing_npcs]
+                
+                # Format the list of names properly
+                if len(npc_names) == 1:
+                    continuation_message = f"{npc_names[0]} continues with their previous activity."
+                elif len(npc_names) == 2:
+                    continuation_message = f"{npc_names[0]} and {npc_names[1]} continue with their previous activities."
+                else:
+                    names_str = ", ".join(npc_names[:-1]) + f", and {npc_names[-1]}"
+                    continuation_message = f"{names_str} continue with their previous activities."
+        
+        # Combine messages
+        result = ""
+        
+        if new_action_messages:
+            result += "\n".join(new_action_messages)
+            
+        if continuation_message:
+            if result:
+                result += "\n" + continuation_message
+            else:
+                result = continuation_message
+                
+        return result
+        
+    def _get_action_verb(self, action):
+        """Get an appropriate verb for an action."""
+        # Common action verbs
+        action_verbs = {
+            "patrolling": "is",
+            "guarding": "is",
+            "walking": "is",
+            "running": "is",
+            "hiding": "is",
+            "shopping": "is",
+            "eating": "is",
+            "working": "is",
+            "selling": "is",
+            "talking": "is",
+            "fighting": "is",
+            "sleeping": "is",
+            "idle": "is standing around",
+            "watching": "is",
+            "looking": "is",
+            "searching": "is",
+            "waiting": "is",
+            "resting": "is",
+            "gardening": "is"
+        }
+        
+        # Check if we have a specific verb for this action
+        if action in action_verbs:
+            return action_verbs[action]
+            
+        # Default verb
+        return "is"
                 
     def move_npc_randomly(self, npc):
         """Move an NPC randomly within their current area."""

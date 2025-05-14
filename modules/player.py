@@ -158,14 +158,45 @@ class Player:
         # Display NPCs in the area
         if self.current_area.npcs:
             print("People in this area:")
+            
+            # Group NPCs by their current action for better narrative
+            npcs_by_action = {}
+            
             for npc in self.current_area.npcs:
                 # Get the relative position of the NPC
                 npc_rel_x = npc.coordinates.x - self.current_area.coordinates.x
                 npc_rel_y = npc.coordinates.y - self.current_area.coordinates.y
+                
                 # Only show NPCs that are visible (in the same area)
                 if 0 <= npc_rel_x < self.current_area.grid_width and 0 <= npc_rel_y < self.current_area.grid_length:
                     direction = self.get_relative_direction(grid_x, grid_y, npc_rel_x, npc_rel_y)
-                    print(f"- {npc.name}: ({direction})") # remove descriptions for NPCs
+                    
+                    # Get the NPC's current action
+                    current_action = npc.current_action if hasattr(npc, 'current_action') else "idle"
+                    
+                    # Group by action
+                    if current_action not in npcs_by_action:
+                        npcs_by_action[current_action] = []
+                    npcs_by_action[current_action].append((npc, direction))
+            
+            # Display NPCs grouped by action
+            for action, npc_list in npcs_by_action.items():
+                if len(npc_list) == 1:
+                    # Single NPC
+                    npc, direction = npc_list[0]
+                    print(f"- {npc.name} ({direction}): {action}")
+                else:
+                    # Multiple NPCs doing the same action
+                    npc_names = []
+                    for npc, direction in npc_list:
+                        npc_names.append(f"{npc.name} ({direction})")
+                    
+                    if len(npc_names) == 2:
+                        names_str = f"{npc_names[0]} and {npc_names[1]}"
+                    else:
+                        names_str = ", ".join(npc_names[:-1]) + f", and {npc_names[-1]}"
+                    
+                    print(f"- {names_str}: {action}")
         
         # Display objects in the area
         if self.current_area.objects:

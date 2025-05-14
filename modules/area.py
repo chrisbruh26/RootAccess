@@ -179,6 +179,49 @@ class Area:
     def get_property(self, key, default=None):
         """Get a property for this area."""
         return self.properties.get(key, default)
+        
+    def is_position_valid(self, x, y, z=0):
+        """Check if a position is valid (within bounds and not occupied)."""
+        # Check if coordinates are within grid bounds
+        if not (0 <= x < self.grid_width and 0 <= y < self.grid_length):
+            return False
+            
+        # Check if position is already occupied by a solid object
+        grid_key = (x, y, z)
+        if grid_key in self.grid_objects:
+            # Check if any object at this position is solid/blocking
+            for obj in self.grid_objects[grid_key]:
+                # NPCs can share space with other NPCs
+                if hasattr(obj, '__class__') and obj.__class__.__name__ != 'NPC':
+                    # If it's not an NPC, check if it's blocking
+                    if hasattr(obj, 'blocking') and obj.blocking:
+                        return False
+        
+        return True
+        
+    def move_object(self, obj, from_x, from_y, to_x, to_y, z=0):
+        """Move an object from one position to another within the grid."""
+        # Check if the destination is valid
+        if not self.is_position_valid(to_x, to_y, z):
+            return False
+            
+        # Remove from old position
+        self.remove_object_from_grid(obj, from_x, from_y, z)
+        
+        # Add to new position
+        grid_key = (to_x, to_y, z)
+        if grid_key not in self.grid_objects:
+            self.grid_objects[grid_key] = []
+        self.grid_objects[grid_key].append(obj)
+        
+        # Update object's coordinates
+        obj.coordinates = Coordinates(
+            self.coordinates.x + to_x,  # Global x coordinate
+            self.coordinates.y + to_y,  # Global y coordinate
+            self.coordinates.z + z      # Global z coordinate
+        )
+        
+        return True
     
     def set_weather(self, weather):
         """Set the weather for this area."""

@@ -1,6 +1,25 @@
 """
 NPC module for Root Access v3.
 Handles all non-player characters in the game world.
+
+
+
+A few modifications are needed: 1) sometimes when I use "help" near NPCs, I get this error: " File "/home/reginapinkdog/projects/Game_files/RootAccessStuff/simplified_scalable_improvements/root_access_v3/modules/npc.py", line 963, in update_npc_behavior
+
+    self.process_npc_behavior(npc, game)
+
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+AttributeError: 'NPCBehaviorCoordinator' object has no attribute 'process_npc_behavior'. Did you mean: 'process_npc_behaviors'?" 
+2) I noticed that the NPCManager removes NPCs from the grid and places them again in a new spot. This feels less smooth than simply updating their position the way the player would, so I want to make NPC positions update by incrementing their X and Y coordinates. 
+3) civilian names are still showing, but I would prefer that they just show as plain and ordinary people, like "3 civilians are walking" or "3 people are walking". 
+4) Multiple NPC actions should be grouped together, which does happen, but I don't see it very often. If multiple npcs do activities in the same category, like walk_actions (name changed from movement_actions for clarity), the game should choose a random action from that list. For example, sometimes I see too many individual actions that should be grouped, like "Grace is strolling.
+
+David is walking around.
+
+Ben is exploring the area." These should be grouped together with a random selection in those NPCs' actions, while also not showing names of random civilians anymore, to make "3 civilians are exploring the area." 
+
+
 """
 import os
 import json
@@ -12,7 +31,9 @@ class NPC:
     """NPC class representing non-player characters in the game world."""
     def __init__(self, name, description, coordinates=None, dialogue=None, personality=None, 
                  money=0, relationships=None, properties=None, inventory=None, schedule=None, gang=None):
-        self.name = name
+        self.name = name  # Real name (internal use)
+        self.display_name = name  # Name displayed to player (can be generic like "Civilian")
+        self.known_to_player = True  # Whether the player knows this NPC's real name
         self.description = description
         self.coordinates = coordinates if coordinates else Coordinates(0, 0, 0)
         self.location = None
@@ -54,6 +75,13 @@ class NPC:
     
     def talk(self, player):
         """Talk to the NPC."""
+        # When player talks to an NPC, they learn their real name
+        if not self.known_to_player:
+            print(f"You approach the {self.display_name}. You learn their name is {self.name}.")
+            self.known_to_player = True
+        else:
+            print(f"You approach {self.name}.")
+        
         # Check relationship with player
         relationship = self.get_relationship(player)
         
@@ -1321,15 +1349,17 @@ class NPCBehaviorCoordinator:
         ]
         
         return f"{npc.name} {random.choice(generic_actions)}."
-    
     def format_action_messages(self):
         """Format action messages into a readable summary with improved readability."""
         if not self.action_messages:
             return None
             
-        # Group similar actions
-        action_groups = {}
+        # Group NPCs by type and action
+        civilian_actions = {}  # Action -> list of civilian NPCs
+        gang_member_actions = {}  # Action -> list of gang member NPCs
+        named_npc_actions = {}  # Action -> list of named NPCs (not civilians or gang members)
         
+        # First, collect all NPCs and their actions
         for message in self.action_messages:
             # Extract NPC name and action
             parts = message.split(" ", 1)
@@ -1342,11 +1372,49 @@ class NPCBehaviorCoordinator:
             # Remove trailing period for grouping
             if action.endswith("."):
                 action = action[:-1]
+            
+            # Find the NPC object to determine its type
+            npc = None
+            # We need to access the NPCManager's npcs dictionary
+            # Since this is in the NPCBehaviorCoordinator class, we don't have direct access
+            # Let's use a more generic approach
+            from modules.game_manager import GameManager
+            if hasattr(GameManager, 'instance') and GameManager.instance:
+                for npc_id, npc_obj in GameManager.instance.npc_manager.npcs.items():
+                    if npc_obj.name == npc_name:
+                        npc = npc_obj
+                        break
+            
+            if not npc:
+                # If we can't find the NPC, just add it to named NPCs
+                if action not in named_npc_actions:
+                    named_npc_actions[action] = []
+                named_npc_actions[action].append(npc_name)
+                continue
+            
+            npc_name = parts[0]
+            action = parts[1]
+            
+            # Remove trailing period for grouping
+            if action.endswith("."):
+                action = action[:-1]
                 
-            # Group by action
-            if action not in action_groups:
-                action_groups[action] = []
-            action_groups[action].append(npc_name)
+            # Group by NPC type and action
+            if isinstance(npc, Civilian) or npc.behavior_type == "civilian":
+                # For civilians, we don't use their names
+                if action not in civilian_actions:
+                    civilian_actions[action] = []
+                civilian_actions[action].append(npc)
+            elif isinstance(npc, GangMember) or npc.behavior_type == "gang_member":
+                # For gang members, we use their gang affiliation
+                if action not in gang_member_actions:
+                    gang_member_actions[action] = []
+                gang_member_actions[action].append(npc)
+            else:
+                # For other NPCs, use their names
+                if action not in named_npc_actions:
+                    named_npc_actions[action] = []
+                named_npc_actions[action].append(npc_name)
         
         # Categorize actions by type for better organization
         action_categories = {
@@ -1358,13 +1426,40 @@ class NPCBehaviorCoordinator:
             "other": []        # Everything else
         }
         
-        # Limit to a maximum of 5 different action groups for readability
-        sorted_groups = sorted(action_groups.items(), key=lambda x: len(x[1]), reverse=True)
-        if len(sorted_groups) > 5:
-            sorted_groups = sorted_groups[:5]
+        # Process civilian actions
+        for action, npcs in civilian_actions.items():
+            count = len(npcs)
+            if count == 1:
+                formatted_msg = f"A civilian {action}."
+            else:
+                formatted_msg = f"{count} civilians {action}."
             
-        # Format each action group and categorize it
-        for action, npc_names in sorted_groups:
+            # Categorize the message
+            self._categorize_action(action, formatted_msg, action_categories)
+        
+        # Process gang member actions
+        for action, npcs in gang_member_actions.items():
+            # Group by gang
+            gang_groups = {}
+            for npc in npcs:
+                gang_name = npc.gang if hasattr(npc, 'gang') and npc.gang else "Unknown Gang"
+                if gang_name not in gang_groups:
+                    gang_groups[gang_name] = []
+                gang_groups[gang_name].append(npc)
+            
+            # Format messages for each gang
+            for gang_name, gang_npcs in gang_groups.items():
+                count = len(gang_npcs)
+                if count == 1:
+                    formatted_msg = f"A {gang_name} gang member {action}."
+                else:
+                    formatted_msg = f"{count} {gang_name} gang members {action}."
+                
+                # Categorize the message
+                self._categorize_action(action, formatted_msg, action_categories)
+        
+        # Process named NPC actions
+        for action, npc_names in named_npc_actions.items():
             # Format the message based on number of NPCs
             if len(npc_names) == 1:
                 # Single NPC
@@ -1381,20 +1476,8 @@ class NPCBehaviorCoordinator:
                 formatted_msg = f"{npc_names[0]}, {npc_names[1]}, {npc_names[2]} and {others_count} others {action}."
             
             # Categorize the message
-            action_lower = action.lower()
-            if any(word in action_lower for word in ["fight", "attack", "threaten", "punch", "kick", "shoot"]):
-                action_categories["combat"].append(formatted_msg)
-            elif any(word in action_lower for word in ["patrol", "guard", "watch", "survey"]):
-                action_categories["patrol"].append(formatted_msg)
-            elif any(word in action_lower for word in ["talk", "chat", "discuss", "whisper", "gossip"]):
-                action_categories["social"].append(formatted_msg)
-            elif any(word in action_lower for word in ["use", "examine", "hold", "carry", "eat", "drink"]):
-                action_categories["item_use"].append(formatted_msg)
-            elif any(word in action_lower for word in ["walk", "move", "stroll", "explore"]):
-                action_categories["movement"].append(formatted_msg)
-            else:
-                action_categories["other"].append(formatted_msg)
-        
+            self._categorize_action(action, formatted_msg, action_categories)
+            
         # Combine messages by category with appropriate connectors
         result_parts = []
         
@@ -1430,6 +1513,22 @@ class NPCBehaviorCoordinator:
         
         # Join all parts with paragraph breaks for better readability
         return "\n".join(result_parts)
+    
+    def _categorize_action(self, action, formatted_msg, action_categories):
+        """Helper method to categorize an action message."""
+        action_lower = action.lower()
+        if any(word in action_lower for word in ["fight", "attack", "threaten", "punch", "kick", "shoot"]):
+            action_categories["combat"].append(formatted_msg)
+        elif any(word in action_lower for word in ["patrol", "guard", "watch", "survey"]):
+            action_categories["patrol"].append(formatted_msg)
+        elif any(word in action_lower for word in ["talk", "chat", "discuss", "whisper", "gossip"]):
+            action_categories["social"].append(formatted_msg)
+        elif any(word in action_lower for word in ["use", "examine", "hold", "carry", "eat", "drink"]):
+            action_categories["item_use"].append(formatted_msg)
+        elif any(word in action_lower for word in ["walk", "move", "stroll", "explore", "wander", "roam", "amble", "pace"]):
+            action_categories["movement"].append(formatted_msg)
+        else:
+            action_categories["other"].append(formatted_msg)
         
     def _combine_category_messages(self, messages, first_connector=""):
         """Combine messages within a category."""
@@ -1483,9 +1582,9 @@ class NPCManager:
             },
             "shopkeeper": {
                 "idle": ["street"],
-                "opening_shop": ["street"],
-                "selling": ["street"],
-                "closing_shop": ["street"]
+                "opening_shop": ["shop"],
+                "selling": ["shop"],
+                "closing_shop": ["shop"]
             }
         }
     
@@ -1837,17 +1936,20 @@ class NPCManager:
         new_x = max(0, min(npc.location.grid_width - 1, rel_x + dx))
         new_y = max(0, min(npc.location.grid_length - 1, rel_y + dy))
         
-        # Update NPC coordinates
-        npc.coordinates.x = npc.location.coordinates.x + new_x
-        npc.coordinates.y = npc.location.coordinates.y + new_y
-        
-        # Update grid position in the area
-        npc.location.remove_object_from_grid(npc, rel_x, rel_y)
-        npc.location.place_object_at(npc, new_x, new_y)
-        
-        # Update action to reflect movement
-        movement_actions = ["walking around", "exploring", "moving", "wandering"]
-        npc.current_action = random.choice(movement_actions)
+        # Check if the new position is valid (not occupied)
+        if npc.location.is_position_valid(new_x, new_y):
+            # Update grid position in the area - use the area's move_object method
+            # instead of removing and placing
+            npc.location.move_object(npc, rel_x, rel_y, new_x, new_y)
+            
+            # Update NPC coordinates
+            npc.coordinates.x = npc.location.coordinates.x + new_x
+            npc.coordinates.y = npc.location.coordinates.y + new_y
+            
+            # Update action to reflect movement
+            walk_actions = ["walking around", "exploring", "moving", "wandering", 
+                           "strolling", "pacing", "roaming", "ambling"]
+            npc.current_action = random.choice(walk_actions)
     
     def save_to_json(self, filename):
         """Save all NPCs and gangs to a JSON file."""

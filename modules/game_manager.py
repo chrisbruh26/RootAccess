@@ -77,112 +77,95 @@ class GameManager:
     
     def create_starting_areas(self):
         """Create the starting areas for the game."""
-        # Create home area
-        home = Area(
-            "Home",
-            "Your secret base of operations. It's small but functional.",
-            Coordinates(0, 0, 0),
-            grid_width=5,
-            grid_length=5
-        )
-        self.area_manager.add_area(home)
+        # Create areas from templates
+        area_coordinates = {
+            "home": Coordinates(0, 0, 0),
+            "garden": Coordinates(0, 5, 0),
+            "street": Coordinates(8, 5, 0),
+            "shop": Coordinates(15, 5, 0),  # Add shop next to street
+            "alley": Coordinates(23, 5, 0),
+            "plaza": Coordinates(8, 10, 0),
+            "warehouse": Coordinates(8, -5, 0),
+            "construction_site": Coordinates(20, 10, 0)
+        }
         
-        # Create garden area
-        garden = Area(
-            "Garden",
-            "A small garden area with fertile soil.",
-            Coordinates(0, 5, 0),
-            grid_width=8,
-            grid_length=8,
-            weather="sunny"
-        )
-        self.area_manager.add_area(garden)
-        
-        # Create street area
-        street = Area(
-            "Street",
-            "A busy street with various shops and people.",
-            Coordinates(8, 5, 0),
-            grid_width=15,
-            grid_length=5
-        )
-        self.area_manager.add_area(street)
-        
-        # Create alley area
-        alley = Area(
-            "Alley",
-            "A dark alley between buildings.",
-            Coordinates(23, 5, 0),
-            grid_width=10,
-            grid_length=3,
-            weather="foggy"
-        )
-        self.area_manager.add_area(alley)
-        
-        # Create plaza area
-        plaza = Area(
-            "Plaza",
-            "A large open plaza with a fountain in the center.",
-            Coordinates(8, 10, 0),
-            grid_width=12,
-            grid_length=12,
-            weather="sunny"
-        )
-        self.area_manager.add_area(plaza)
-        
-        # Create warehouse area
-        warehouse = Area(
-            "Warehouse",
-            "An abandoned warehouse, taken over by the Bloodhounds.",
-            Coordinates(8, -5, 0),
-            grid_width=15,
-            grid_length=15,
-            weather="dusty"
-        )
-        self.area_manager.add_area(warehouse)
-        
-        # Create construction site area
-        construction_site = Area(
-            "Construction Site",
-            "A construction site with various equipment and materials.",
-            Coordinates(20, 10, 0),
-            grid_width=20,
-            grid_length=10
-        )
-        self.area_manager.add_area(construction_site)
+        # Create areas from templates
+        for area_id, coords in area_coordinates.items():
+            template = self.area_manager.templates.get(area_id)
+            if template:
+                if template.get("type") == "Area":
+                    area = Area(
+                        template.get("name", area_id.capitalize()),
+                        template.get("description", "An area in the game."),
+                        coords,
+                        grid_width=template.get("grid_width", 10),
+                        grid_length=template.get("grid_length", 10),
+                        weather=template.get("weather", "clear")
+                    )
+                    self.area_manager.add_area(area)
+                    print(f"Created area: {area.name}")
         
         # Create office building
-        office_building = Building(
-            "Office Building",
-            "A tall office building with multiple floors.",
-            Coordinates(0, 15, 0),
-            num_floors=5,
-            grid_width=10,
-            grid_length=10
-        )
-        self.area_manager.add_area(office_building)
-        
-        # Create floors for the office building
-        for floor in range(1, 6):
-            floor_area = Area(
-                f"Office Floor {floor}",
-                f"Floor {floor} of the office building.",
-                Coordinates(0, 15, floor - 1),
-                grid_width=10,
-                grid_length=10,
-                weather="controlled"
+        office_template = self.area_manager.templates.get("office_building")
+        if office_template:
+            office_building = Building(
+                office_template.get("name", "Office Building"),
+                office_template.get("description", "A tall office building."),
+                Coordinates(0, 15, 0),
+                num_floors=office_template.get("num_floors", 5),
+                grid_width=office_template.get("grid_width", 10),
+                grid_length=office_template.get("grid_length", 10)
             )
-            self.area_manager.add_area(floor_area)
-            office_building.add_floor(floor, floor_area)
+            self.area_manager.add_area(office_building)
+            
+            # Create floors for the office building
+            floor_template = self.area_manager.templates.get("office_floor")
+            for floor in range(1, office_template.get("num_floors", 5) + 1):
+                floor_area = Area(
+                    f"Office Floor {floor}",
+                    f"Floor {floor} of the office building.",
+                    Coordinates(0, 15, floor - 1),
+                    grid_width=floor_template.get("grid_width", 10),
+                    grid_length=floor_template.get("grid_length", 10),
+                    weather=floor_template.get("weather", "controlled")
+                )
+                self.area_manager.add_area(floor_area)
+                office_building.add_floor(floor, floor_area)
         
         # Connect areas
-        self.area_manager.connect_areas(home.id, "north", garden.id)
-        self.area_manager.connect_areas(garden.id, "east", street.id)
-        self.area_manager.connect_areas(street.id, "east", alley.id)
-        self.area_manager.connect_areas(street.id, "north", plaza.id)
-        self.area_manager.connect_areas(street.id, "south", warehouse.id)
-        self.area_manager.connect_areas(plaza.id, "east", construction_site.id)
-        self.area_manager.connect_areas(plaza.id, "west", office_building.id)
+        home = self.area_manager.get_area("home")
+        garden = self.area_manager.get_area("garden")
+        street = self.area_manager.get_area("street")
+        shop = self.area_manager.get_area("shop")
+        alley = self.area_manager.get_area("alley")
+        plaza = self.area_manager.get_area("plaza")
+        warehouse = self.area_manager.get_area("warehouse")
+        construction_site = self.area_manager.get_area("construction_site")
+        office_building = self.area_manager.get_area("office_building")
+        
+        if home and garden:
+            self.area_manager.connect_areas(home.id, "north", garden.id)
+        
+        if garden and street:
+            self.area_manager.connect_areas(garden.id, "east", street.id)
+        
+        if street and shop:
+            self.area_manager.connect_areas(street.id, "east", shop.id)
+            
+        if shop and alley:
+            self.area_manager.connect_areas(shop.id, "east", alley.id)
+        
+        if street and plaza:
+            self.area_manager.connect_areas(street.id, "north", plaza.id)
+        
+        if street and warehouse:
+            self.area_manager.connect_areas(street.id, "south", warehouse.id)
+        
+        if plaza and construction_site:
+            self.area_manager.connect_areas(plaza.id, "east", construction_site.id)
+        
+        if plaza and office_building:
+            self.area_manager.connect_areas(plaza.id, "west", office_building.id)
     
     def create_starting_items(self):
         """Create the starting items for the game."""
@@ -342,204 +325,224 @@ class GameManager:
     
     def create_starting_npcs(self):
         """Create the starting NPCs for the game."""
+        import random
+        
         # Create gangs
         bloodhounds = self.npc_manager.create_gang("Bloodhounds")
         crimson_vipers = self.npc_manager.create_gang("Crimson Vipers")
         
-        # Create civilian NPCs
-        civilian_names = ["Ben", "Bob", "Charlie", "David", "Emma", "Frank", "Grace", "Hannah", "Ian", "Julia"]
-        for i, name in enumerate(civilian_names[:5]):
-            civilian = Civilian(
-                name,
-                f"A civilian named {name}.",
-                personality={
-                    "friendliness": 50 + i * 5,
-                    "curiosity": 40 + i * 5
-                },
-                money=50 + i * 10
-            )
-            self.npc_manager.add_npc(civilian)
-            
-            # Add some items to civilians
-            if i % 2 == 0:  # Every other civilian gets a watering can
-                watering_can = WateringCan()
-                civilian.add_to_inventory(watering_can)
-            
-            if i % 3 == 0:  # Every third civilian gets a seed
-                seed = Seed(
-                    "Carrot Seed",
-                    "A seed for growing carrots.",
-                    plant_type="carrot",
-                    growth_time=3,
-                    value=5
-                )
-                civilian.add_to_inventory(seed)
+        # Generate random names for NPCs
+        first_names = ["Alex", "Ben", "Charlie", "David", "Emma", "Frank", "Grace", "Hannah", "Ian", "Julia", 
+                      "Kai", "Lily", "Max", "Nina", "Oscar", "Penny", "Quinn", "Ruby", "Sam", "Tina"]
         
-        # Create Bloodhound gang members
-        bloodhound_names = ["Buck", "Bubbles", "Boop", "Noodle", "Flop"]
-        for i, name in enumerate(bloodhound_names):
-            gang_member = GangMember(
-                name,
-                f"A member of the Bloodhounds named {name}.",
-                "Bloodhounds",
-                personality={
-                    "aggression": 70,
-                    "loyalty": 80
-                },
-                money=100
-            )
-            self.npc_manager.add_npc(gang_member)
-            bloodhounds.add_member(gang_member)
-            
-            # Add weapons to gang members
-            gun = Weapon(
-                "Gun",
-                "A standard firearm.",
-                damage=50,
-                durability=20,
-                value=50
-            )
-            gang_member.add_to_inventory(gun)
-        
-        # Create Crimson Viper gang members
-        viper_names = ["Vipoop", "Snakle", "Rattlesnop", "Pythirt", "Anaceaky"]
-        for i, name in enumerate(viper_names):
-            gang_member = GangMember(
-                name,
-                f"A member of the Crimson Vipers named {name}.",
-                "Crimson Vipers",
-                personality={
-                    "aggression": 60,
-                    "cunning": 70
-                },
-                money=100
-            )
-            self.npc_manager.add_npc(gang_member)
-            crimson_vipers.add_member(gang_member)
-            
-            # Add weapons to gang members
-            pipe = Weapon(
-                "Pipe",
-                "A metal pipe that can be used as a weapon.",
-                damage=15,
-                durability=10,
-                value=15
-            )
-            gang_member.add_to_inventory(pipe)
-        
-        # Create a shopkeeper
-        shopkeeper = Civilian(
-            "Shopkeeper",
-            "A friendly shopkeeper selling various goods.",
-            dialogue={
-                "default": "Welcome to my shop! Feel free to browse around.",
-                "friendly": "Ah, my favorite customer! What can I get for you today?"
-            },
-            personality={
-                "friendliness": 60,
-                "greed": 40
-            },
-            money=500
-        )
-        self.npc_manager.add_npc(shopkeeper)
-        
-        # Set up areas for placing NPCs (excluding player's home)
-        garden = self.area_manager.get_area("garden")
+        # Create NPCs from templates
+        # Civilians
+        shop = self.area_manager.get_area("shop")
         street = self.area_manager.get_area("street")
+        garden = self.area_manager.get_area("garden")
+        plaza = self.area_manager.get_area("plaza")
         warehouse = self.area_manager.get_area("warehouse")
         construction_site = self.area_manager.get_area("construction_site")
-        plaza = self.area_manager.get_area("plaza")
-        # Note: We don't place NPCs in the player's home
+        alley = self.area_manager.get_area("alley")
         
-        # Set up schedules for civilians
+        # Set up time constants for schedules
         morning = 8 * 60  # 8:00 AM in minutes
         noon = 12 * 60    # 12:00 PM in minutes
         afternoon = 15 * 60  # 3:00 PM in minutes
         evening = 18 * 60  # 6:00 PM in minutes
         night = 22 * 60   # 10:00 PM in minutes
         
-        # Place civilians and set their schedules
-        if garden and street and plaza:
-            for i, name in enumerate(civilian_names[:3]):
-                civilian = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
-                if civilian:
-                    # Place in garden initially
+        # Create civilians
+        civilian_template = self.npc_manager.templates.get("civilian")
+        if civilian_template:
+            for i in range(8):  # Create 8 civilians
+                # Generate a unique name for this civilian
+                name = random.choice(first_names)
+                first_names.remove(name)  # Ensure unique names
+                
+                # Create a civilian with a hidden name
+                civilian = Civilian(
+                    name,  # Real name stored internally
+                    civilian_template.get("description", "An ordinary citizen going about their day."),
+                    personality=civilian_template.get("personality", {"friendliness": 50, "curiosity": 40}),
+                    money=civilian_template.get("money", 50) + random.randint(-20, 20),
+                    dialogue=civilian_template.get("dialogue", {"default": "Hello there!"})
+                )
+                
+                # Set display name to generic "Civilian" (will be revealed on interaction)
+                civilian.display_name = "Civilian"
+                civilian.known_to_player = False
+                
+                self.npc_manager.add_npc(civilian)
+                
+                # Add random items to civilians based on template
+                possible_items = civilian_template.get("possible_items", [])
+                if possible_items:
+                    # Give each civilian 1-2 random items from their possible items
+                    num_items = random.randint(1, 2)
+                    for _ in range(num_items):
+                        item_template_id = random.choice(possible_items)
+                        item = self.item_manager.create_from_template(item_template_id)
+                        if item:
+                            civilian.add_to_inventory(item)
+        
+                # Place civilians in different areas
+                if i < 3 and garden:
                     garden.place_object_at(civilian, 2 + i, 2)
-                    
-                    # Set schedule
                     civilian.set_schedule(morning, "working", garden)
-                    civilian.set_schedule(noon, "eating", plaza)
-                    civilian.set_schedule(afternoon, "walking", street)
-                    civilian.set_schedule(evening, "shopping", street)
-                    civilian.set_schedule(night, "idle", garden)
-                    
-                    # Set current action based on time
+                    civilian.set_schedule(noon, "eating", plaza if plaza else garden)
+                    civilian.set_schedule(afternoon, "walking", street if street else garden)
+                    civilian.set_schedule(evening, "shopping", shop if shop else street if street else garden)
+                    civilian.set_schedule(night, "sleeping", garden)
                     civilian.current_action = "enjoying the garden"
-        
-        # Place shopkeeper and set schedule
-        if street:
-            shopkeeper = next((npc for npc in self.npc_manager.npcs.values() if npc.name == "Shopkeeper"), None)
-            if shopkeeper:
-                street.place_object_at(shopkeeper, 7, 2)
-                
-                # Set shopkeeper schedule
-                shopkeeper.set_schedule(morning - 60, "opening_shop", street)
-                shopkeeper.set_schedule(morning, "selling", street)
-                shopkeeper.set_schedule(evening, "closing_shop", street)
-                shopkeeper.set_schedule(night, "idle", street)
-                
-                # Set current action
-                shopkeeper.current_action = "managing the shop"
-            
-            # Place other civilians in street
-            for i, name in enumerate(civilian_names[3:5]):
-                civilian = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
-                if civilian:
-                    street.place_object_at(civilian, 10 + i, 2)
-                    
-                    # Set schedule
-                    civilian.set_schedule(morning, "shopping", street)
-                    civilian.set_schedule(noon, "eating", plaza)
-                    civilian.set_schedule(afternoon, "walking", garden)
+                elif i < 6 and street:
+                    street.place_object_at(civilian, 5 + i, 2)
+                    civilian.set_schedule(morning, "walking", street)
+                    civilian.set_schedule(noon, "eating", plaza if plaza else street)
+                    civilian.set_schedule(afternoon, "shopping", shop if shop else street)
                     civilian.set_schedule(evening, "idle", street)
-                    
-                    # Set current action
-                    civilian.current_action = "shopping"
+                    civilian.set_schedule(night, "sleeping", street)
+                    civilian.current_action = "walking down the street"
+                elif plaza:
+                    plaza.place_object_at(civilian, 3 + i % 3, 3 + i % 3)
+                    civilian.set_schedule(morning, "walking", plaza)
+                    civilian.set_schedule(noon, "eating", plaza)
+                    civilian.set_schedule(afternoon, "idle", plaza)
+                    civilian.set_schedule(evening, "shopping", shop if shop else street if street else plaza)
+                    civilian.set_schedule(night, "sleeping", plaza)
+                    civilian.current_action = "relaxing in the plaza"
         
-        # Place gang members and set their schedules
-        if warehouse:
-            for i, name in enumerate(bloodhound_names):
-                gang_member = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
-                if gang_member:
-                    warehouse.place_object_at(gang_member, 3 + i * 2, 3 + i)
-                    
-                    # Set gang member schedule
-                    gang_member.set_schedule(morning, "patrolling", warehouse)
-                    gang_member.set_schedule(afternoon, "meeting", warehouse)
-                    gang_member.set_schedule(evening, "patrolling", warehouse)
-                    gang_member.set_schedule(night, "guarding", warehouse)
-                    
-                    # Set current action
-                    gang_member.current_action = "guarding the warehouse"
+        # Create shopkeeper
+        shopkeeper_template = self.npc_manager.templates.get("shopkeeper")
+        if shopkeeper_template and shop:
+            shopkeeper = Civilian(
+                shopkeeper_template.get("name", "Shopkeeper"),
+                shopkeeper_template.get("description", "A friendly shopkeeper selling various goods."),
+                dialogue=shopkeeper_template.get("dialogue", {"default": "Welcome to my shop!"}),
+                personality=shopkeeper_template.get("personality", {"friendliness": 60, "greed": 40}),
+                money=shopkeeper_template.get("money", 500)
+            )
+            self.npc_manager.add_npc(shopkeeper)
             
+            # Add items to shopkeeper's inventory
+            possible_items = shopkeeper_template.get("possible_items", [])
+            if possible_items:
+                for item_template_id in possible_items:
+                    item = self.item_manager.create_from_template(item_template_id)
+                    if item:
+                        shopkeeper.add_to_inventory(item)
+            
+            # Place shopkeeper in shop
+            shop.place_object_at(shopkeeper, 3, 3)
+            
+            # Set shopkeeper schedule
+            shopkeeper.set_schedule(morning - 60, "opening_shop", shop)
+            shopkeeper.set_schedule(morning, "selling", shop)
+            shopkeeper.set_schedule(evening, "closing_shop", shop)
+            shopkeeper.set_schedule(night, "idle", shop)
+            
+            # Set current action
+            shopkeeper.current_action = "managing the shop"
+        
+        # Create Bloodhound gang members
+        bloodhound_template = self.npc_manager.templates.get("gang_member_bloodhound")
+        if bloodhound_template:
+            for i in range(5):  # Create 5 Bloodhound members
+                # Generate a unique name for this gang member
+                name = f"Bloodhound {random.choice(['Crusher', 'Smasher', 'Bruiser', 'Thug', 'Enforcer', 'Goon', 'Muscle'])} {i+1}"
+                
+                gang_member = GangMember(
+                    name,
+                    bloodhound_template.get("description", "A member of the Bloodhounds gang."),
+                    "Bloodhounds",
+                    personality=bloodhound_template.get("personality", {"aggression": 70, "loyalty": 80}),
+                    money=bloodhound_template.get("money", 100) + random.randint(-20, 20),
+                    dialogue=bloodhound_template.get("dialogue", {"default": "What do you want?"})
+                )
+                
+                # Set display name to generic gang member (will be revealed on interaction)
+                gang_member.display_name = "Bloodhound Gang Member"
+                gang_member.known_to_player = False
+                
+                self.npc_manager.add_npc(gang_member)
+                bloodhounds.add_member(gang_member)
+                
+                # Add items to gang member's inventory
+                possible_items = bloodhound_template.get("possible_items", [])
+                if possible_items:
+                    # Give each gang member 1-2 random items from their possible items
+                    num_items = random.randint(1, 2)
+                    for _ in range(num_items):
+                        item_template_id = random.choice(possible_items)
+                        item = self.item_manager.create_from_template(item_template_id)
+                        if item:
+                            gang_member.add_to_inventory(item)
+                
+                # Place gang members in warehouse or alley
+                if i < 3 and warehouse:
+                    warehouse.place_object_at(gang_member, 3 + i, 3 + i)
+                    gang_member.set_schedule(morning, "patrolling", warehouse)
+                    gang_member.set_schedule(noon, "guarding", warehouse)
+                    gang_member.set_schedule(evening, "meeting", warehouse)
+                    gang_member.set_schedule(night, "sleeping", warehouse)
+                    gang_member.current_action = "patrolling the warehouse"
+                elif alley:
+                    alley.place_object_at(gang_member, 2 + i % 3, 1)
+                    gang_member.set_schedule(morning, "patrolling", alley)
+                    gang_member.set_schedule(noon, "guarding", alley)
+                    gang_member.set_schedule(evening, "dealing", alley)
+                    gang_member.set_schedule(night, "patrolling", alley)
+                    gang_member.current_action = "guarding the alley"
+        
+        # Create Crimson Viper gang members
+        viper_template = self.npc_manager.templates.get("gang_member_viper")
+        if viper_template:
+            for i in range(5):  # Create 5 Viper members
+                # Generate a unique name for this gang member
+                name = f"Viper {random.choice(['Striker', 'Slasher', 'Venom', 'Fang', 'Cobra', 'Python', 'Serpent'])} {i+1}"
+                
+                gang_member = GangMember(
+                    name,
+                    viper_template.get("description", "A member of the Crimson Vipers gang."),
+                    "Crimson Vipers",
+                    personality=viper_template.get("personality", {"aggression": 60, "cunning": 70}),
+                    money=viper_template.get("money", 100) + random.randint(-20, 20),
+                    dialogue=viper_template.get("dialogue", {"default": "Keep moving."})
+                )
+                
+                # Set display name to generic gang member (will be revealed on interaction)
+                gang_member.display_name = "Crimson Viper Gang Member"
+                gang_member.known_to_player = False
+                
+                self.npc_manager.add_npc(gang_member)
+                crimson_vipers.add_member(gang_member)
+                
+                # Add items to gang member's inventory
+                possible_items = viper_template.get("possible_items", [])
+                if possible_items:
+                    # Give each gang member 1-2 random items from their possible items
+                    num_items = random.randint(1, 2)
+                    for _ in range(num_items):
+                        item_template_id = random.choice(possible_items)
+                        item = self.item_manager.create_from_template(item_template_id)
+                        if item:
+                            gang_member.add_to_inventory(item)
+                
+                # Place gang members in construction site
+                if construction_site:
+                    construction_site.place_object_at(gang_member, 5 + i % 5, 2 + i % 3)
+                    gang_member.set_schedule(morning, "patrolling", construction_site)
+                    gang_member.set_schedule(noon, "meeting", construction_site)
+                    gang_member.set_schedule(evening, "guarding", construction_site)
+                    gang_member.set_schedule(night, "sleeping", construction_site)
+                    gang_member.current_action = "hanging out at the construction site"
+        
+        # Claim territories for gangs
+        if warehouse:
             # Claim warehouse as Bloodhounds territory
             bloodhounds.claim_territory(warehouse)
         
         if construction_site:
-            for i, name in enumerate(viper_names):
-                gang_member = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
-                if gang_member:
-                    construction_site.place_object_at(gang_member, 5 + i * 2, 5)
-                    
-                    # Set gang member schedule
-                    gang_member.set_schedule(morning, "patrolling", construction_site)
-                    gang_member.set_schedule(noon, "dealing", construction_site)
-                    gang_member.set_schedule(evening, "patrolling", construction_site)
-                    gang_member.set_schedule(night, "guarding", construction_site)
-                    
-                    # Set current action
-                    gang_member.current_action = "patrolling the construction site"
-            
             # Claim construction site as Crimson Vipers territory
             crimson_vipers.claim_territory(construction_site)
     

@@ -443,13 +443,13 @@ class GameManager:
         )
         self.npc_manager.add_npc(shopkeeper)
         
-        # Set up areas for placing NPCs
+        # Set up areas for placing NPCs (excluding player's home)
         garden = self.area_manager.get_area("garden")
         street = self.area_manager.get_area("street")
         warehouse = self.area_manager.get_area("warehouse")
         construction_site = self.area_manager.get_area("construction_site")
         plaza = self.area_manager.get_area("plaza")
-        home = self.area_manager.get_area("home")
+        # Note: We don't place NPCs in the player's home
         
         # Set up schedules for civilians
         morning = 8 * 60  # 8:00 AM in minutes

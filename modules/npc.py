@@ -325,8 +325,8 @@ class NPC:
         """Set the NPC's schedule for a specific time."""
         self.schedule[time] = (activity, location)
     
-    def update_activity(self, current_time):
-        """Update the NPC's activity based on the current time."""
+    def update_activity(self, current_time, npc_manager=None, area_manager=None):
+        """Update the NPC's activity based on the current time and move to appropriate areas."""
         # Convert time string to minutes if it's a string (HH:MM format)
         if isinstance(current_time, str) and ":" in current_time:
             try:
@@ -343,17 +343,42 @@ class NPC:
         # Find the closest scheduled time
         scheduled_times = sorted(self.schedule.keys())
         current_activity = "idle"
-        current_location = None
+        scheduled_location = None
         
         for time in scheduled_times:
             if current_time_minutes >= time:
-                current_activity, current_location = self.schedule[time]
+                current_activity, scheduled_location = self.schedule[time]
             else:
                 break
         
+        # Set the current activity
         self.current_activity = current_activity
-        if current_location and current_location != self.location:
-            self.set_location(current_location)
+        
+        # Determine if we need to move the NPC
+        need_to_move = False
+        target_location = scheduled_location
+        
+        # If we have a scheduled location, use it
+        if scheduled_location and scheduled_location != self.location:
+            need_to_move = True
+        
+        # If we don't have a scheduled location or if the current location is not suitable
+        # for the current activity, find a suitable location
+        elif npc_manager and area_manager:
+            # Check if current location is suitable
+            if not self.location or not npc_manager.is_area_suitable_for_npc(self, self.location.id, self.current_activity):
+                # Find a suitable area using the helper method
+                target_location = npc_manager.find_suitable_area_for_npc(self, area_manager, self.current_activity)
+                if target_location:
+                    need_to_move = True
+        
+        # Move the NPC if needed
+        if need_to_move and target_location:
+            self.set_location(target_location)
+            
+            # If the NPC is in the middle of an action, interrupt it
+            if self.is_action_ongoing():
+                self.interrupt_action()
             
         # Update the current action based on the activity
         self.update_action()
@@ -1415,10 +1440,120 @@ class NPCManager:
         self.templates = {}  # Dictionary of NPC templates
         self.gangs = {}  # Dictionary mapping gang IDs to Gang objects
         self.behavior_coordinator = NPCBehaviorCoordinator()  # Coordinates NPC behaviors
+        
+        # Define restricted areas where NPCs shouldn't spawn
+        self.restricted_areas = ["home"]  # Player's home is off-limits for NPCs
+        
+        # Define appropriate areas for different NPC types and activities
+        self.area_suitability = {
+            "civilian": {
+                "idle": ["plaza", "garden", "street"],
+                "walking": ["street", "plaza", "garden", "alley"],
+                "shopping": ["street"],
+                "eating": ["plaza", "street"],
+                "working": ["street", "office_floor"],
+                "sleeping": [],  # Will be filled with homes/apartments when implemented
+                "gardening": ["garden"]
+            },
+            "gang_member": {
+                "idle": [],  # Will be filled with gang territories
+                "patrolling": [],  # Will be filled with gang territories
+                "guarding": [],  # Will be filled with gang territories
+                "meeting": [],  # Will be filled with gang territories
+                "dealing": ["alley", "construction_site"],
+                "fighting": []  # Can be anywhere, but preferably in territories
+            },
+            "shopkeeper": {
+                "idle": ["street"],
+                "opening_shop": ["street"],
+                "selling": ["street"],
+                "closing_shop": ["street"]
+            }
+        }
     
     def add_npc(self, npc):
         """Add an NPC to the manager."""
         self.npcs[npc.id] = npc
+        
+    def is_area_suitable_for_npc(self, npc, area_id, activity=None):
+        """Check if an area is suitable for an NPC based on their type and activity."""
+        # Player's home is off-limits for NPCs
+        if area_id in self.restricted_areas:
+            return False
+            
+        # If no specific activity is provided, use the NPC's current activity
+        if activity is None:
+            activity = npc.current_activity
+            
+        # Determine NPC type
+        npc_type = "civilian"
+        if isinstance(npc, GangMember) or npc.behavior_type == "gang_member":
+            npc_type = "gang_member"
+        elif npc.name == "Shopkeeper":
+            npc_type = "shopkeeper"
+            
+        # Check if the area is suitable for this NPC type and activity
+        suitable_areas = self.area_suitability.get(npc_type, {}).get(activity, [])
+        
+        # Gang members can always be in their gang's territory
+        if npc_type == "gang_member" and hasattr(npc, 'gang') and npc.gang:
+            gang = self.gangs.get(npc.gang)
+            if gang and area_id in [territory.id for territory in gang.territories]:
+                return True
+                
+        # If no suitable areas are defined, allow any area except restricted ones
+        if not suitable_areas:
+            return True
+            
+        return area_id in suitable_areas
+        
+    def find_suitable_area_for_npc(self, npc, area_manager, activity=None):
+        """Find a suitable area for an NPC based on their type and activity."""
+        import random
+        
+        # If no specific activity is provided, use the NPC's current activity
+        if activity is None:
+            activity = npc.current_activity
+            
+        # Collect suitable areas
+        suitable_areas = []
+        
+        # Determine NPC type
+        npc_type = "civilian"
+        if isinstance(npc, GangMember) or npc.behavior_type == "gang_member":
+            npc_type = "gang_member"
+        elif npc.name == "Shopkeeper":
+            npc_type = "shopkeeper"
+            
+        # Get suitable areas for this NPC type and activity
+        activity_areas = self.area_suitability.get(npc_type, {}).get(activity, [])
+        suitable_areas.extend(activity_areas)
+        
+        # Gang members prefer their gang's territory
+        if npc_type == "gang_member" and hasattr(npc, 'gang') and npc.gang:
+            gang = self.gangs.get(npc.gang)
+            if gang and gang.territories:
+                # Add gang territories to suitable areas with higher priority
+                for territory in gang.territories:
+                    suitable_areas.insert(0, territory.id)  # Add at the beginning for higher priority
+        
+        # Remove restricted areas and duplicates
+        suitable_areas = list(dict.fromkeys([area for area in suitable_areas if area not in self.restricted_areas]))
+        
+        # If we have suitable areas, pick one randomly
+        if suitable_areas:
+            # Try to find areas that exist in the area manager
+            existing_areas = []
+            for area_id in suitable_areas:
+                area = area_manager.get_area(area_id)
+                if area:
+                    existing_areas.append(area)
+            
+            if existing_areas:
+                return random.choice(existing_areas)
+        
+        # If no suitable areas found, return None
+        return None
     
     def get_npc(self, npc_id):
         """Get an NPC by ID."""
@@ -1505,18 +1640,35 @@ class NPCManager:
         return gang
     
     def update_all_npcs(self, current_time, game=None):
-        """Update all NPCs based on the current time."""
+        """Update all NPCs based on the current time with environment awareness."""
         import random
         
-        # First, update all NPCs' activities based on their schedules
+        # First, update all NPCs' activities based on their schedules and environment suitability
         for npc in self.npcs.values():
-            npc.update_activity(current_time)
+            # Skip NPCs in restricted areas (like player's home)
+            if npc.location and npc.location.id in self.restricted_areas:
+                # Move the NPC out of the restricted area
+                if game and hasattr(game, 'area_manager'):
+                    suitable_area = self.find_suitable_area_for_npc(npc, game.area_manager)
+                    if suitable_area:
+                        npc.set_location(suitable_area)
+                        print(f"DEBUG: Moved {npc.name} from restricted area {npc.location.id} to {suitable_area.name}")
+            
+            # Update the NPC's activity with environment awareness
+            if game and hasattr(game, 'area_manager'):
+                npc.update_activity(current_time, self, game.area_manager)
+            else:
+                npc.update_activity(current_time)
         
         # Group NPCs by area for more efficient processing
         npcs_by_area = {}
         for npc in self.npcs.values():
             if npc.location:
                 area_id = npc.location.id
+                # Skip NPCs in restricted areas
+                if area_id in self.restricted_areas:
+                    continue
+                    
                 if area_id not in npcs_by_area:
                     npcs_by_area[area_id] = []
                 npcs_by_area[area_id].append(npc)
@@ -1527,11 +1679,19 @@ class NPCManager:
             # Process behaviors for this group of NPCs
             behavior_message = self.behavior_coordinator.process_npc_behaviors(game, area_npcs)
             if behavior_message:
-                npc_behavior_messages.append(behavior_message)
+                # Add area name to the message for context
+                area_name = "Unknown Area"
+                if game and hasattr(game, 'area_manager'):
+                    area = game.area_manager.get_area(area_id)
+                    if area:
+                        area_name = area.name
+                
+                area_message = f"In {area_name}:\n{behavior_message}"
+                npc_behavior_messages.append(area_message)
         
         # Return the behavior messages
         if npc_behavior_messages:
-            return "\n".join(npc_behavior_messages)
+            return "\n\n".join(npc_behavior_messages)
         return None
                 
     def move_npc_randomly(self, npc):

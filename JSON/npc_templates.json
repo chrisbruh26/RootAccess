@@ -1,0 +1,128 @@
+{
+    "civilian": {
+        "name": "Civilian",
+        "description": "An ordinary citizen going about their day.",
+        "dialogue": {
+            "default": "Hello there!",
+            "friendly": "Nice to see you again!"
+        },
+        "personality": {
+            "friendliness": 50,
+            "curiosity": 40
+        },
+        "money": 50,
+        "schedule": {
+            "8:00": [
+                "walking",
+                "plaza"
+            ],
+            "12:00": [
+                "eating",
+                "street"
+            ],
+            "18:00": [
+                "shopping",
+                "plaza"
+            ],
+            "22:00": [
+                "sleeping",
+                "home"
+            ]
+        }
+    },
+    "gang_member_bloodhound": {
+        "name": "Bloodhound Gang Member",
+        "description": "A member of the Bloodhounds gang.",
+        "dialogue": {
+            "default": "What do you want? This is Bloodhound territory.",
+            "hostile": "You're asking for trouble coming here!"
+        },
+        "personality": {
+            "aggression": 70,
+            "loyalty": 80
+        },
+        "money": 100,
+        "gang": "Bloodhounds",
+        "schedule": {
+            "10:00": [
+                "patrolling",
+                "warehouse"
+            ],
+            "14:00": [
+                "guarding",
+                "alley"
+            ],
+            "20:00": [
+                "meeting",
+                "warehouse"
+            ],
+            "2:00": [
+                "sleeping",
+                "warehouse"
+            ]
+        }
+    },
+    "gang_member_viper": {
+        "name": "Crimson Viper Gang Member",
+        "description": "A member of the Crimson Vipers gang.",
+        "dialogue": {
+            "default": "Keep moving. Vipers don't like strangers.",
+            "hostile": "You're in Viper territory now. Big mistake."
+        },
+        "personality": {
+            "aggression": 60,
+            "cunning": 70
+        },
+        "money": 100,
+        "gang": "Crimson Vipers",
+        "schedule": {
+            "9:00": [
+                "patrolling",
+                "plaza"
+            ],
+            "15:00": [
+                "dealing",
+                "alley"
+            ],
+            "21:00": [
+                "meeting",
+                "construction_site"
+            ],
+            "3:00": [
+                "sleeping",
+                "construction_site"
+            ]
+        }
+    },
+    "shopkeeper": {
+        "name": "Shopkeeper",
+        "description": "A friendly shopkeeper selling various goods.",
+        "dialogue": {
+            "default": "Welcome to my shop! Feel free to browse around.",
+            "friendly": "Ah, my favorite customer! What can I get for you today?"
+        },
+        "personality": {
+            "friendliness": 60,
+            "greed": 40
+        },
+        "money": 500,
+        "schedule": {
+            "8:00": [
+                "opening_shop",
+                "street"
+            ],
+            "12:00": [
+                "selling",
+                "street"
+            ],
+            "20:00": [
+                "closing_shop",
+                "street"
+            ],
+            "22:00": [
+                "sleeping",
+                "home"
+            ]
+        }
+    }
+}

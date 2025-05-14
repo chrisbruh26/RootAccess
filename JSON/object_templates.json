@@ -1,0 +1,80 @@
+{
+    "soil_plot": {
+        "type": "SoilPlot",
+        "name": "Soil Plot",
+        "description": "A plot of soil for planting seeds."
+    },
+    "computer": {
+        "type": "Computer",
+        "name": "Computer",
+        "description": "A computer that can be used for hacking.",
+        "programs": [
+            "data_miner",
+            "security_override",
+            "plant_hacker"
+        ]
+    },
+    "hacking_terminal": {
+        "type": "Computer",
+        "name": "Hacking Terminal",
+        "description": "A specialized terminal for hacking operations.",
+        "programs": [
+            "data_miner",
+            "security_override",
+            "plant_hacker"
+        ]
+    },
+    "closet": {
+        "type": "HidingSpot",
+        "name": "Closet",
+        "description": "A small closet that you can hide in.",
+        "stealth_bonus": 0.8
+    },
+    "bushes": {
+        "type": "HidingSpot",
+        "name": "Bushes",
+        "description": "Dense bushes that provide good cover.",
+        "stealth_bonus": 0.7
+    },
+    "dumpster": {
+        "type": "HidingSpot",
+        "name": "Dumpster",
+        "description": "A large dumpster you can hide behind.",
+        "stealth_bonus": 0.6
+    },
+    "fountain": {
+        "type": "HidingSpot",
+        "name": "Fountain",
+        "description": "A large fountain with decorative elements to hide behind.",
+        "stealth_bonus": 0.5
+    },
+    "crates": {
+        "type": "HidingSpot",
+        "name": "Crates",
+        "description": "Stacked crates that provide decent cover.",
+        "stealth_bonus": 0.6
+    },
+    "vending_machine": {
+        "type": "VendingMachine",
+        "name": "Vending Machine",
+        "description": "A vending machine selling various items."
+    },
+    "elevator": {
+        "type": "Elevator",
+        "name": "Elevator",
+        "description": "An elevator that can take you to different floors."
+    },
+    "car": {
+        "type": "Vehicle",
+        "name": "Car",
+        "description": "A standard car that can be driven around.",
+        "speed": 3,
+        "fuel": 100,
+        "max_fuel": 100
+    },
+    "door": {
+        "type": "Door",
+        "name": "Door",
+        "description": "A standard door that connects areas."
+    }
+}

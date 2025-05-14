@@ -1,3 +1,6 @@
+# changes: 
+# NPCs react to player action, so far just watch nervously when player attacks someone (hilarious) 
+
 """
 NPC module for Root Access v3.
 Handles all non-player characters in the game world.

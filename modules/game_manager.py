@@ -443,41 +443,102 @@ class GameManager:
         )
         self.npc_manager.add_npc(shopkeeper)
         
-        # Place NPCs in areas
+        # Set up areas for placing NPCs
         garden = self.area_manager.get_area("garden")
-        if garden:
+        street = self.area_manager.get_area("street")
+        warehouse = self.area_manager.get_area("warehouse")
+        construction_site = self.area_manager.get_area("construction_site")
+        plaza = self.area_manager.get_area("plaza")
+        home = self.area_manager.get_area("home")
+        
+        # Set up schedules for civilians
+        morning = 8 * 60  # 8:00 AM in minutes
+        noon = 12 * 60    # 12:00 PM in minutes
+        afternoon = 15 * 60  # 3:00 PM in minutes
+        evening = 18 * 60  # 6:00 PM in minutes
+        night = 22 * 60   # 10:00 PM in minutes
+        
+        # Place civilians and set their schedules
+        if garden and street and plaza:
             for i, name in enumerate(civilian_names[:3]):
                 civilian = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
                 if civilian:
+                    # Place in garden initially
                     garden.place_object_at(civilian, 2 + i, 2)
+                    
+                    # Set schedule
+                    civilian.set_schedule(morning, "working", garden)
+                    civilian.set_schedule(noon, "eating", plaza)
+                    civilian.set_schedule(afternoon, "walking", street)
+                    civilian.set_schedule(evening, "shopping", street)
+                    civilian.set_schedule(night, "idle", garden)
+                    
+                    # Set current action based on time
+                    civilian.current_action = "enjoying the garden"
         
-        street = self.area_manager.get_area("street")
+        # Place shopkeeper and set schedule
         if street:
             shopkeeper = next((npc for npc in self.npc_manager.npcs.values() if npc.name == "Shopkeeper"), None)
             if shopkeeper:
                 street.place_object_at(shopkeeper, 7, 2)
+                
+                # Set shopkeeper schedule
+                shopkeeper.set_schedule(morning - 60, "opening_shop", street)
+                shopkeeper.set_schedule(morning, "selling", street)
+                shopkeeper.set_schedule(evening, "closing_shop", street)
+                shopkeeper.set_schedule(night, "idle", street)
+                
+                # Set current action
+                shopkeeper.current_action = "managing the shop"
             
+            # Place other civilians in street
             for i, name in enumerate(civilian_names[3:5]):
                 civilian = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
                 if civilian:
                     street.place_object_at(civilian, 10 + i, 2)
+                    
+                    # Set schedule
+                    civilian.set_schedule(morning, "shopping", street)
+                    civilian.set_schedule(noon, "eating", plaza)
+                    civilian.set_schedule(afternoon, "walking", garden)
+                    civilian.set_schedule(evening, "idle", street)
+                    
+                    # Set current action
+                    civilian.current_action = "shopping"
         
-        warehouse = self.area_manager.get_area("warehouse")
+        # Place gang members and set their schedules
         if warehouse:
             for i, name in enumerate(bloodhound_names):
                 gang_member = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
                 if gang_member:
                     warehouse.place_object_at(gang_member, 3 + i * 2, 3 + i)
+                    
+                    # Set gang member schedule
+                    gang_member.set_schedule(morning, "patrolling", warehouse)
+                    gang_member.set_schedule(afternoon, "meeting", warehouse)
+                    gang_member.set_schedule(evening, "patrolling", warehouse)
+                    gang_member.set_schedule(night, "guarding", warehouse)
+                    
+                    # Set current action
+                    gang_member.current_action = "guarding the warehouse"
             
             # Claim warehouse as Bloodhounds territory
             bloodhounds.claim_territory(warehouse)
         
-        construction_site = self.area_manager.get_area("construction_site")
         if construction_site:
             for i, name in enumerate(viper_names):
                 gang_member = next((npc for npc in self.npc_manager.npcs.values() if npc.name == name), None)
                 if gang_member:
                     construction_site.place_object_at(gang_member, 5 + i * 2, 5)
+                    
+                    # Set gang member schedule
+                    gang_member.set_schedule(morning, "patrolling", construction_site)
+                    gang_member.set_schedule(noon, "dealing", construction_site)
+                    gang_member.set_schedule(evening, "patrolling", construction_site)
+                    gang_member.set_schedule(night, "guarding", construction_site)
+                    
+                    # Set current action
+                    gang_member.current_action = "patrolling the construction site"
             
             # Claim construction site as Crimson Vipers territory
             crimson_vipers.claim_territory(construction_site)
@@ -834,18 +895,97 @@ class GameManager:
         elif action == "time":
             print(f"Current time: {self.time_system.get_time_string()}")
             print(f"Time of day: {self.time_system.get_time_of_day()}")
+            
+        # Advance time command
+        elif action in ["advance_time", "wait", "skip"]:
+            if len(parts) > 1:
+                try:
+                    minutes = int(parts[1])
+                    if minutes > 0:
+                        print(f"Advancing time by {minutes} minutes...")
+                        self.update_game_time(minutes)
+                        print(f"Current time: {self.time_system.get_time_string()}")
+                        self.player.look_around()  # Show updated environment
+                    else:
+                        print("Please specify a positive number of minutes.")
+                except ValueError:
+                    print("Please specify a valid number of minutes.")
+            else:
+                print("Usage: advance_time [minutes]")
+                print("Example: advance_time 60 (advances time by 1 hour)")
         
-        # Teleport command (for debugging)
+        # Position/coordinates command
+        elif action in ["position", "pos", "coordinates", "coords", "where"]:
+            # If no arguments, show player's position
+            if len(parts) == 1:
+                if self.player.current_area:
+                    grid_x, grid_y, grid_z = self.player.get_grid_position()
+                    print(f"You are in: {self.player.current_area.name}")
+                    print(f"Grid coordinates: ({grid_x}, {grid_y})")
+                    print(f"Area dimensions: {self.player.current_area.grid_width}x{self.player.current_area.grid_length}")
+                else:
+                    print("You're not in any area.")
+            # If arguments, find the coordinates of the specified entity
+            else:
+                entity_name = " ".join(parts[1:]).lower()
+                self.find_entity_coordinates(entity_name)
+        
+        # Teleport command
         elif action in ["teleport", "tp"]:
             if len(parts) > 1:
-                area_name = " ".join(parts[1:])
-                area = next((a for a in self.area_manager.areas.values() if a.name.lower() == area_name.lower()), None)
-                if area:
-                    self.player.set_current_area(area, area.grid_width // 2, area.grid_length // 2)
-                else:
-                    print(f"Area '{area_name}' not found.")
+                # Parse the command to extract area name and/or coordinates
+                area = None
+                grid_x = None
+                grid_y = None
+                
+                # Check for coordinates in the format "x,y" or "x y"
+                coord_parts = []
+                area_name_parts = []
+                
+                for part in parts[1:]:
+                    # Check if part is a coordinate pair (x,y)
+                    if "," in part:
+                        try:
+                            x, y = map(int, part.split(","))
+                            grid_x, grid_y = x, y
+                            continue  # Skip this part in further processing
+                        except ValueError:
+                            pass  # Not valid coordinates, treat as part of area name
+                    
+                    # Check if part is a number (potential coordinate)
+                    if part.isdigit():
+                        coord_parts.append(int(part))
+                        continue  # Skip this part in further processing
+                    
+                    # If we get here, it's part of the area name
+                    area_name_parts.append(part)
+                
+                # Process coordinates if found as separate numbers
+                if len(coord_parts) >= 2:
+                    grid_x, grid_y = coord_parts[0], coord_parts[1]
+                
+                # Process area name if found
+                if area_name_parts:
+                    area_name = " ".join(area_name_parts)
+                    area = next((a for a in self.area_manager.areas.values() 
+                                if a.name.lower() == area_name.lower()), None)
+                    if not area:
+                        print(f"Area '{area_name}' not found.")
+                        return
+                
+                # If only coordinates were specified (no area name), use current area
+                if area is None and (grid_x is not None or grid_y is not None):
+                    area = self.player.current_area
+                
+                # Teleport the player
+                self.player.teleport(area, grid_x, grid_y)
             else:
-                print("Usage: teleport [area name]")
+                print("Usage: teleport [area name] [x,y]")
+                print("Examples:")
+                print("  teleport Home")
+                print("  teleport 3,4")
+                print("  teleport Home 3,4")
+                print("  teleport Home 3 4")
         
         # Areas command (for debugging)
         elif action == "areas":
@@ -907,29 +1047,144 @@ class GameManager:
         print(f"Stealth Level: {self.player.stealth_level}")
         print(f"Combat Level: {self.player.combat_level}")
     
+    def find_entity_coordinates(self, entity_name):
+        """Find the coordinates of an entity (NPC, item, or object) by name."""
+        found_entities = []
+        entity_name = entity_name.lower()
+        
+        # Search for NPCs in areas
+        for area in self.area_manager.areas.values():
+            for npc in area.npcs:
+                if entity_name in npc.name.lower():
+                    # Get relative coordinates within the area
+                    rel_x, rel_y, rel_z = area.get_relative_coordinates(npc.coordinates)
+                    found_entities.append({
+                        "type": "NPC",
+                        "name": npc.name,
+                        "area": area.name,
+                        "rel_coords": (rel_x, rel_y, rel_z),
+                        "global_coords": (npc.coordinates.x, npc.coordinates.y, npc.coordinates.z),
+                        "activity": npc.current_activity
+                    })
+        
+        # Also search for NPCs in the NPC manager (in case they're not in an area yet)
+        for npc_id, npc in self.npc_manager.npcs.items():
+            if entity_name in npc.name.lower():
+                # Check if this NPC is already in our results (from an area)
+                if not any(e["type"] == "NPC" and e["name"] == npc.name for e in found_entities):
+                    # NPC not in an area, add with unknown location
+                    found_entities.append({
+                        "type": "NPC",
+                        "name": npc.name,
+                        "area": "Unknown (not in any area)",
+                        "rel_coords": "Unknown",
+                        "global_coords": (npc.coordinates.x, npc.coordinates.y, npc.coordinates.z) if hasattr(npc, 'coordinates') else "Unknown",
+                        "activity": npc.current_activity
+                    })
+        
+        # Search for items
+        for area in self.area_manager.areas.values():
+            for item in area.items:
+                if entity_name in item.name.lower():
+                    # Get relative coordinates within the area
+                    rel_x, rel_y, rel_z = area.get_relative_coordinates(item.coordinates)
+                    found_entities.append({
+                        "type": "Item",
+                        "name": item.name,
+                        "area": area.name,
+                        "rel_coords": (rel_x, rel_y, rel_z),
+                        "global_coords": (item.coordinates.x, item.coordinates.y, item.coordinates.z)
+                    })
+        
+        # Search for objects
+        for area in self.area_manager.areas.values():
+            for obj in area.objects:
+                if entity_name in obj.name.lower():
+                    # Get relative coordinates within the area
+                    rel_x, rel_y, rel_z = area.get_relative_coordinates(obj.coordinates)
+                    found_entities.append({
+                        "type": "Object",
+                        "name": obj.name,
+                        "area": area.name,
+                        "rel_coords": (rel_x, rel_y, rel_z),
+                        "global_coords": (obj.coordinates.x, obj.coordinates.y, obj.coordinates.z)
+                    })
+        
+        # Display results
+        if found_entities:
+            # If there's an exact match, prioritize it
+            exact_matches = [e for e in found_entities if e["name"].lower() == entity_name]
+            if exact_matches:
+                found_entities = exact_matches
+            
+            # If we have multiple matches, show all of them
+            if len(found_entities) > 1:
+                print(f"Found {len(found_entities)} entities matching '{entity_name}':")
+                for i, entity in enumerate(found_entities, 1):
+                    print(f"{i}. {entity['type']} '{entity['name']}' in {entity['area']}")
+                    if entity['rel_coords'] != "Unknown":
+                        print(f"   Area coordinates: {entity['rel_coords']}")
+                    if entity['type'] == 'NPC':
+                        print(f"   Current activity: {entity['activity']}")
+            else:
+                # Just one match, show detailed info
+                entity = found_entities[0]
+                print(f"Found {entity['type']} '{entity['name']}' in {entity['area']}")
+                if entity['rel_coords'] != "Unknown":
+                    print(f"Area coordinates: {entity['rel_coords']}")
+                if entity['global_coords'] != "Unknown":
+                    print(f"Global coordinates: {entity['global_coords']}")
+                if entity['type'] == 'NPC':
+                    print(f"Current activity: {entity['activity']}")
+        else:
+            print(f"Could not find any entity matching '{entity_name}' in the game world.")
+    
     def show_help(self):
-        """Show help information."""
-        print("\nRoot Access v3 Help:")
-        print("Movement: north, south, east, west, forward, backward, right, left")
-        print("Look around: look")
-        print("Inventory: inventory, inv")
-        print("Pick up item: pickup/take/get/grab [item]")
-        print("Drop item: drop [item]")
-        print("Use item: use [item]")
-        print("Eat item: eat [item]")
-        print("Talk to NPC: talk [npc]")
-        print("Interact with object: interact [object]")
-        print("Hide: hide [hiding spot]")
-        print("Unhide: unhide, emerge")
-        print("Hack: hack [target]")
-        print("Attack: attack [target]")
-        print("Plant: plant [seed] in [soil plot]")
-        print("Water: water [soil plot]")
-        print("Harvest: harvest [soil plot]")
-        print("Check time: time")
-        print("Save/Load: save [filename], load [filename]")
-        print("Help: help")
-        print("Quit: quit, exit")
+        """Show help information for the game."""
+        print("\n=== Root Access v3 Help ===")
+        print("\nMovement Commands:")
+        print("  north, south, east, west - Move in a direction")
+        print("  forward, backward, right, left - Alternative movement commands")
+        
+        print("\nLocation Commands:")
+        print("  look - Look around your current location")
+        print("  position, coords, where - Show your current position and coordinates")
+        print("  where [name], coordinates [name] - Find the coordinates of an NPC, item, or object")
+        print("    Examples: 'where Flop', 'where gun', 'coordinates Flop'")
+        print("    Note: Partial matches work too, like 'where blood' to find Bloodhound gang members")
+        print("  teleport [area] [x,y] - Teleport to an area and/or coordinates")
+        print("    Examples: 'teleport Home', 'teleport 3,4', 'teleport Home 3,4'")
+        print("  areas - List all available areas")
+        
+        print("\nInventory Commands:")
+        print("  inventory, inv - Show your inventory")
+        print("  pickup, take, get, grab [item] - Pick up an item")
+        print("  drop [item] - Drop an item")
+        print("  use [item] - Use an item")
+        print("  eat [item] - Eat a consumable item")
+        
+        print("\nInteraction Commands:")
+        print("  talk [npc] - Talk to an NPC")
+        print("  interact [object] - Interact with an object")
+        print("  hide [spot] - Hide in a hiding spot")
+        print("  unhide, emerge - Come out of hiding")
+        print("  hack [target] - Hack a target")
+        print("  attack [target] - Attack a target")
+        
+        print("\nFarming Commands:")
+        print("  plant [seed] in [soil plot] - Plant a seed in a soil plot")
+        print("  water [plot] - Water a soil plot")
+        print("  harvest [plot] - Harvest a mature plant")
+        
+        print("\nSystem Commands:")
+        print("  time - Show the current game time")
+        print("  advance_time, wait, skip [minutes] - Advance time by specified minutes")
+        print("  save [filename] - Save the game")
+        print("  load [filename] - Load a saved game")
+        print("  help - Show this help information")
+        print("  quit, exit - Exit the game")
+        
+        print("\n=== End of Help ===\n")
     
     def run(self):
         """Run the game loop."""

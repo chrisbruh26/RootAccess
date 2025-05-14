@@ -84,8 +84,8 @@ class TimeSystem:
             return self.hour >= start_hour or self.hour < end_hour
     
     def get_time_key(self):
-        """Get a string key for the current time in 24-hour format."""
-        return f"{self.hour}:{self.minute:02d}"
+        """Get the current time as minutes since midnight."""
+        return self.hour * 60 + self.minute
     
     def to_dict(self):
         """Convert time system to dictionary for serialization."""

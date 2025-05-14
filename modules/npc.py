@@ -22,6 +22,7 @@ class NPC:
         self.relationships = relationships or {}  # Relationships with other NPCs and the player
         self.schedule = schedule or {}  # Daily schedule
         self.current_activity = "idle"
+        self.current_action = None  # What the NPC is currently doing (displayed to player)
         self.money = money
         self.properties = properties or {}  # Custom properties
         self.influence_level = 0  # How much the player has influenced this NPC
@@ -319,13 +320,26 @@ class NPC:
     
     def update_activity(self, current_time):
         """Update the NPC's activity based on the current time."""
+        # Convert time string to minutes if it's a string (HH:MM format)
+        if isinstance(current_time, str) and ":" in current_time:
+            try:
+                hour, minute = map(int, current_time.split(":"))
+                current_time_minutes = hour * 60 + minute
+            except ValueError:
+                # If conversion fails, default to idle
+                self.current_activity = "idle"
+                return
+        else:
+            # If it's already an integer, use it directly
+            current_time_minutes = current_time if isinstance(current_time, int) else 0
+        
         # Find the closest scheduled time
         scheduled_times = sorted(self.schedule.keys())
         current_activity = "idle"
         current_location = None
         
         for time in scheduled_times:
-            if current_time >= time:
+            if current_time_minutes >= time:
                 current_activity, current_location = self.schedule[time]
             else:
                 break
@@ -333,6 +347,67 @@ class NPC:
         self.current_activity = current_activity
         if current_location and current_location != self.location:
             self.set_location(current_location)
+            
+        # Update the current action based on the activity
+        self.update_action()
+        
+    def update_action(self):
+        """Update the NPC's current action based on their activity."""
+        activity_actions = {
+            "idle": ["standing around", "looking at their phone", "waiting patiently", "daydreaming"],
+            "walking": ["walking around", "strolling", "exploring the area"],
+            "eating": ["eating a meal", "having a snack", "enjoying some food"],
+            "shopping": ["browsing items", "shopping", "looking at merchandise"],
+            "sleeping": ["sleeping", "resting", "taking a nap"],
+            "working": ["working", "focusing on a task", "being productive"],
+            "patrolling": ["patrolling the area", "keeping watch", "looking for trouble"],
+            "guarding": ["guarding the area", "standing alert", "watching for intruders"],
+            "meeting": ["in a meeting", "talking with others", "discussing plans"],
+            "dealing": ["making deals", "negotiating", "exchanging goods"],
+            "opening_shop": ["opening their shop", "setting up for business", "preparing for customers"],
+            "selling": ["selling goods", "helping customers", "managing their shop"],
+            "closing_shop": ["closing their shop", "cleaning up", "counting money"]
+        }
+        
+        # Get possible actions for the current activity
+        possible_actions = activity_actions.get(self.current_activity, ["doing something"])
+        
+        # Randomly select an action
+        import random
+        self.current_action = random.choice(possible_actions)
+        
+    def patrol(self):
+        """Patrol behavior for gang members."""
+        if not self.location:
+            return
+            
+        # Move randomly within the area
+        import random
+        grid_x = random.randint(0, self.location.grid_width - 1)
+        grid_y = random.randint(0, self.location.grid_length - 1)
+        
+        # Update coordinates
+        self.coordinates.x = self.location.coordinates.x + grid_x
+        self.coordinates.y = self.location.coordinates.y + grid_y
+        
+        # Update action
+        self.current_action = "patrolling the area"
+        
+    def interact_with_environment(self):
+        """Interact with the environment (for civilians)."""
+        if not self.location:
+            return
+            
+        # Possible environmental interactions
+        interactions = [
+            "watering plants", "picking up trash", "examining objects",
+            "taking notes", "taking photos", "chatting with others",
+            "sitting on a bench", "leaning against a wall", "looking at the sky"
+        ]
+        
+        # Randomly select an interaction
+        import random
+        self.current_action = random.choice(interactions)
     
     def set_property(self, key, value):
         """Set a custom property for this NPC."""
@@ -635,17 +710,54 @@ class NPCManager:
     
     def update_all_npcs(self, current_time):
         """Update all NPCs based on the current time."""
+        import random
+        
         for npc in self.npcs.values():
             # Update NPC activity based on schedule
             npc.update_activity(current_time)
             
-            # Execute behavior based on NPC type
-            if npc.behavior_type == "gang_member":
-                if npc.current_activity == "patrolling":
+            # Execute behavior based on NPC type and activity
+            if isinstance(npc, GangMember) or npc.behavior_type == "gang_member":
+                # Gang members have a chance to patrol regardless of activity
+                if npc.current_activity == "patrolling" or random.random() < 0.3:  # 30% chance to patrol
                     npc.patrol()
-            elif npc.behavior_type == "civilian":
-                if random.random() < 0.1:  # 10% chance to interact with environment
+                    
+            elif isinstance(npc, Civilian) or npc.behavior_type == "civilian":
+                # Civilians have a chance to interact with the environment
+                if random.random() < 0.4:  # 40% chance to interact with environment
                     npc.interact_with_environment()
+                    
+            # All NPCs have a small chance to move around randomly
+            if random.random() < 0.2:  # 20% chance to move
+                self.move_npc_randomly(npc)
+                
+    def move_npc_randomly(self, npc):
+        """Move an NPC randomly within their current area."""
+        if not npc.location:
+            return
+            
+        # Get current grid position
+        rel_x = npc.coordinates.x - npc.location.coordinates.x
+        rel_y = npc.coordinates.y - npc.location.coordinates.y
+        
+        # Calculate new position (move 1 step in a random direction)
+        import random
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # N, E, S, W
+        dx, dy = random.choice(directions)
+        new_x = max(0, min(npc.location.grid_width - 1, rel_x + dx))
+        new_y = max(0, min(npc.location.grid_length - 1, rel_y + dy))
+        
+        # Update NPC coordinates
+        npc.coordinates.x = npc.location.coordinates.x + new_x
+        npc.coordinates.y = npc.location.coordinates.y + new_y
+        
+        # Update grid position in the area
+        npc.location.remove_object_from_grid(npc, rel_x, rel_y)
+        npc.location.place_object_at(npc, new_x, new_y)
+        
+        # Update action to reflect movement
+        movement_actions = ["walking around", "exploring", "moving", "wandering"]
+        npc.current_action = random.choice(movement_actions)
     
     def save_to_json(self, filename):
         """Save all NPCs and gangs to a JSON file."""

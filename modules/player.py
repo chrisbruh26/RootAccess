@@ -38,8 +38,45 @@ class Player:
             area.coordinates.y + grid_y,
             area.coordinates.z
         )
+        
+    def get_grid_position(self):
+        """Get the player's position within the current area's grid."""
+        if not self.current_area:
+            return 0, 0, 0
+            
+        # Calculate relative position within the area
+        grid_x = self.coordinates.x - self.current_area.coordinates.x
+        grid_y = self.coordinates.y - self.current_area.coordinates.y
+        grid_z = self.coordinates.z - self.current_area.coordinates.z
+        
+        return grid_x, grid_y, grid_z
+    
+    def teleport(self, area, grid_x=None, grid_y=None):
+        """Teleport the player to a specific area and/or coordinates."""
+        if not area:
+            print("Cannot teleport: No area specified.")
+            return False
+            
+        # If coordinates are not specified, use the center of the area
+        if grid_x is None:
+            grid_x = area.grid_width // 2
+        if grid_y is None:
+            grid_y = area.grid_length // 2
+            
+        # Validate coordinates
+        if grid_x < 0 or grid_x >= area.grid_width or grid_y < 0 or grid_y >= area.grid_length:
+            print(f"Cannot teleport: Coordinates ({grid_x}, {grid_y}) are outside the area boundaries.")
+            print(f"Area dimensions: {area.grid_width}x{area.grid_length}")
+            return False
+            
+        # Set the new area and coordinates
+        self.set_current_area(area, grid_x, grid_y)
+        print(f"Teleported to {area.name} at coordinates ({grid_x}, {grid_y}).")
+        
+        # Look around to show the new area
         print(f"You are now in {area.name}. {area.description}")
         self.look_around()
+        return True
     
     def look_around(self):
         """Look around the current area."""
@@ -186,14 +223,12 @@ class Player:
     def add_item(self, item):
         """Add an item to the player's inventory."""
         self.inventory.append(item)
-        print(f"You have picked up {item.name}.")
 
     def remove_item(self, item_name):
         """Remove an item from the player's inventory."""
         item = next((i for i in self.inventory if i.name.lower() == item_name.lower()), None)
         if item:
             self.inventory.remove(item)
-            print(f"You have dropped {item.name}.")
             
             # Add the item to the current area
             if self.current_area:
@@ -346,6 +381,8 @@ class Player:
         if item:
             self.current_area.remove_item(item.name)
             self.add_item(item)
+            print(f"You have picked up {item.name}.")
+
         else:
             # Check for items in the area's item list
             item = next((i for i in self.current_area.items if i.name.lower() == item_name.lower()), None)
@@ -358,6 +395,8 @@ class Player:
                 if distance <= 1:  # Can only pick up items within 1 grid unit
                     self.current_area.remove_item(item.name)
                     self.add_item(item)
+                    print(f"You have picked up {item.name}.")
+
                 else:
                     print(f"The {item_name} is too far away. Move closer to pick it up.")
             else:
@@ -366,6 +405,7 @@ class Player:
     def drop(self, item_name):
         """Drop an item from inventory."""
         self.remove_item(item_name)
+        print(f"You have dropped {item_name}.")
     
     def use(self, item_name):
         """Use an item from inventory."""
